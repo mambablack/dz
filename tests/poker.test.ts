@@ -6,6 +6,7 @@ import {
   cardText,
   chooseBotDecision,
   completeTrainingRound,
+  generateRoundCoachReport,
   createReadyGame,
   createTrainingRound,
   getToCall,
@@ -107,9 +108,16 @@ assert.equal(updatedRound.handsPlayed, 1);
 assert.deepEqual(updatedRound.handIds, [roundRecord.id]);
 assert.equal(updatedRound.heroProfit, roundRecord.heroProfit);
 
-const completedRound = completeTrainingRound(updatedRound);
+const completedRound = completeTrainingRound(updatedRound, [roundRecord]);
 assert.equal(completedRound.status, 'completed');
 assert.ok(completedRound.endedAt);
 assert.equal(completedRound.handsPlayed, 1);
+assert.ok(completedRound.coachReport);
+assert.equal(completedRound.coachReport?.items.length, 4);
+assert.equal(completedRound.coachReport?.nextSteps.length, 3);
+const regeneratedReport = generateRoundCoachReport(completedRound, [
+  roundRecord,
+]);
+assert.match(regeneratedReport.summary, /1 手/);
 
 console.log('Poker engine checks passed: evaluator + 120 complete hands');

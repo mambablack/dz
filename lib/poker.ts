@@ -78,6 +78,13 @@ export interface HandAdvice {
   headline: string;
   items: AdviceItem[];
 }
+export interface RoundCoachReport {
+  grade: HandAdvice['grade'];
+  headline: string;
+  summary: string;
+  items: AdviceItem[];
+  nextSteps: string[];
+}
 
 export interface SidePotResult {
   amount: number;
@@ -166,6 +173,7 @@ export interface TrainingRoundRecord {
     B: number;
     C: number;
   };
+  coachReport?: RoundCoachReport | null;
 }
 
 const RANKS: Rank[] = [
@@ -1155,6 +1163,7 @@ export function createTrainingRound(sessionId: string): TrainingRoundRecord {
     showdownHands: 0,
     wins: 0,
     gradeCounts: { A: 0, B: 0, C: 0 },
+    coachReport: null,
   };
 }
 
@@ -1178,14 +1187,141 @@ export function appendHandToRound(
     gradeCounts,
   };
 }
+export function generateRoundCoachReport(
+  round: TrainingRoundRecord,
+  hands: HandRecord[] = [],
+): RoundCoachReport {
+  const count = round.handsPlayed;
+  const gradeCounts = round.gradeCounts ?? { A: 0, B: 0, C: 0 };
+  const gradedHands = gradeCounts.A + gradeCounts.B + gradeCounts.C;
+  const gradeScore = gradedHands
+    ? (gradeCounts.A * 2 + gradeCounts.B) / (gradedHands * 2)
+    : 0.5;
+  const grade: HandAdvice['grade'] =
+    gradeScore >= 0.72 ? 'A' : gradeScore >= 0.4 ? 'B' : 'C';
+  const vpip = count ? Math.round((round.vpipHands / count) * 100) : 0;
+  const pfr = count ? Math.round((round.pfrHands / count) * 100) : 0;
+  const passiveGap = vpip - pfr;
+  const profitBb = round.heroProfit / BIG_BLIND;
+
+  const issueCounts = new Map<string, number>();
+  hands.forEach((hand) => {
+    hand.advice.items
+      .filter((item) => item.verdict === 'review')
+      .forEach((item) => {
+        issueCounts.set(item.title, (issueCounts.get(item.title) ?? 0) + 1);
+      });
+  });
+  const recurringIssue = [...issueCounts.entries()].sort(
+    (left, right) => right[1] - left[1],
+  )[0];
+
+  const items: AdviceItem[] = [
+    {
+      title: '决策质量分布',
+      verdict: grade === 'A' ? 'good' : grade === 'C' ? 'review' : 'note',
+      text:
+        count === 0
+          ? '本轮还没有完成手牌，结束若干手后才会形成整体评价。'
+          : `本轮单手评分为 A ${gradeCounts.A}、B ${gradeCounts.B}、C ${gradeCounts.C}。综合评价关注决策过程，不按短期输赢打分。`,
+    },
+    {
+      title: '翻前入池结构',
+      verdict:
+        count < 6 ? 'note' : passiveGap >= 15 || vpip >= 45 ? 'review' : 'good',
+      text:
+        count < 6
+          ? `当前 VPIP ${vpip}%、PFR ${pfr}%，样本不足 6 手，只记录倾向，不据此给打法定性。`
+          : passiveGap >= 15
+            ? `VPIP ${vpip}%、PFR ${pfr}%，两者相差 ${passiveGap} 个百分点。下一轮优先检查冷跟是否过多，并明确哪些牌应改为加注或弃牌。`
+            : vpip >= 45
+              ? `VPIP ${vpip}% 偏宽。复盘边缘起手牌，尤其是在前位和面对加注时，避免仅因“想看翻牌”而入池。`
+              : `VPIP ${vpip}%、PFR ${pfr}%，本轮未出现明显的被动入池信号；继续结合位置和对手类型选择范围。`,
+    },
+    recurringIssue && recurringIssue[1] >= 2
+      ? {
+          title: `重复问题：${recurringIssue[0]}`,
+          verdict: 'review',
+          text: `这一问题在 ${recurringIssue[1]} 手牌后建议中重复出现。它应成为下一轮的首要训练主题，而不是分散修正多个小问题。`,
+        }
+      : {
+          title: '重复性漏洞',
+          verdict: 'good',
+          text:
+            count < 3
+              ? '手牌数量较少，暂时无法判断是否存在重复性漏洞。'
+              : '本轮单手建议中尚未出现两次以上的同类警报，继续观察是否形成稳定模式。',
+        },
+    {
+      title: '结果隔离',
+      verdict: 'note',
+      text: `本轮盈亏为 ${profitBb >= 0 ? '+' : ''}${profitBb.toFixed(1)} BB。这个数字用于记录波动；是否执行了清晰、可复述的决策流程，才是训练报告的核心。`,
+    },
+  ];
+
+  const nextSteps: string[] = [];
+  if (recurringIssue && recurringIssue[1] >= 2) {
+    nextSteps.push(
+      `把“${recurringIssue[0]}”设为下一轮唯一主课题，每次相关决策前停顿并口述理由。`,
+    );
+  }
+  if (passiveGap >= 15 && count >= 6) {
+    nextSteps.push('翻前面对入池机会时先做“加注或弃牌”判断，再考虑跟注。');
+  } else if (vpip >= 45 && count >= 6) {
+    nextSteps.push(
+      '收紧前位和面对加注时的边缘牌，记录每次入池所依赖的位置优势。',
+    );
+  } else {
+    nextSteps.push(
+      '每次翻前入池时记录位置、牌力与计划，继续观察 VPIP 与 PFR 的结构。',
+    );
+  }
+  nextSteps.push('大额下注前先写出：更差牌会不会跟、更好牌会不会弃。');
+  if (count < 6) {
+    nextSteps.push('下一轮至少完成 6–8 手，再判断频率类指标是否形成趋势。');
+  } else {
+    nextSteps.push(
+      '下一轮结束后对照本报告，先检查重复问题是否减少，再看盈亏。',
+    );
+  }
+
+  const headline =
+    count === 0
+      ? '等待本轮形成训练样本'
+      : grade === 'C'
+        ? '先修正决策流程中的高频漏洞'
+        : recurringIssue && recurringIssue[1] >= 2
+          ? `集中训练：${recurringIssue[0]}`
+          : passiveGap >= 15 && count >= 6
+            ? '减少被动入池，建立翻前主动性'
+            : grade === 'A'
+              ? '本轮决策节奏整体稳定'
+              : '本轮基础线路基本稳定';
+
+  return {
+    grade,
+    headline,
+    summary:
+      count === 0
+        ? '完成手牌后，教练会先汇总整轮趋势，再提供逐手复盘。'
+        : `本轮完成 ${count} 手，VPIP ${vpip}%、PFR ${pfr}%，盈亏 ${profitBb >= 0 ? '+' : ''}${profitBb.toFixed(1)} BB。${count < 6 ? ' 当前样本较小，报告只用于发现决策过程，不判断长期打法。' : ' 频率指标已可用于发现初步趋势，但仍需跨多轮验证。'}`,
+    items,
+    nextSteps: nextSteps.slice(0, 3),
+  };
+}
 
 export function completeTrainingRound(
   round: TrainingRoundRecord,
+  hands: HandRecord[] = [],
 ): TrainingRoundRecord {
-  return {
+  const completed: TrainingRoundRecord = {
     ...round,
     endedAt: new Date().toISOString(),
     status: 'completed',
+  };
+  return {
+    ...completed,
+    coachReport: generateRoundCoachReport(completed, hands),
   };
 }
 

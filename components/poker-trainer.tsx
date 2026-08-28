@@ -44,6 +44,7 @@ import {
   createTrainingRound,
   getPot,
   getToCall,
+  generateRoundCoachReport,
   isRedSuit,
   positionLabel,
   preflopStrength,
@@ -58,6 +59,7 @@ import {
   type HandAdvice,
   type HandRecord,
   type TrainingRoundRecord,
+  type RoundCoachReport,
   type Player,
 } from '@/lib/poker';
 
@@ -78,6 +80,124 @@ const betPositions = [
   'right-[25%] top-[24%]',
   'right-[22%] bottom-[27%]',
 ];
+interface RoundArchiveEntry {
+  id: string;
+  label: string;
+  round: TrainingRoundRecord;
+  hands: HandRecord[];
+  legacy: boolean;
+}
+
+function sortRoundHands(hands: HandRecord[]) {
+  return [...hands].sort(
+    (left, right) =>
+      (left.roundHandNumber ?? left.handNumber) -
+      (right.roundHandNumber ?? right.handNumber),
+  );
+}
+
+function aggregateHandsAsRound(
+  id: string,
+  hands: HandRecord[],
+): TrainingRoundRecord {
+  const ordered = sortRoundHands(hands);
+  const gradeCounts = ordered.reduce(
+    (counts, hand) => {
+      counts[hand.advice.grade] += 1;
+      return counts;
+    },
+    { A: 0, B: 0, C: 0 },
+  );
+  return {
+    id,
+    sessionId: ordered[0]?.sessionId ?? '',
+    startedAt: ordered[0]?.playedAt ?? new Date().toISOString(),
+    endedAt: ordered[ordered.length - 1]?.playedAt ?? null,
+    status: 'completed',
+    handIds: ordered.map((hand) => hand.id),
+    handsPlayed: ordered.length,
+    heroProfit: ordered.reduce((sum, hand) => sum + hand.heroProfit, 0),
+    vpipHands: ordered.filter((hand) => hand.heroStats.vpip).length,
+    pfrHands: ordered.filter((hand) => hand.heroStats.pfr).length,
+    showdownHands: ordered.filter((hand) => hand.heroStats.wentToShowdown)
+      .length,
+    wins: ordered.filter((hand) => hand.heroStats.won).length,
+    gradeCounts,
+    coachReport: null,
+  };
+}
+
+function buildRoundArchive(
+  rounds: TrainingRoundRecord[],
+  history: HandRecord[],
+): RoundArchiveEntry[] {
+  const chronological = [...rounds].sort(
+    (left, right) =>
+      new Date(left.startedAt).getTime() - new Date(right.startedAt).getTime(),
+  );
+  const labels = new Map(
+    chronological.map((round, index) => [
+      round.id,
+      `训练轮次 ${String(index + 1).padStart(2, '0')}`,
+    ]),
+  );
+  const assignedHands = new Set<string>();
+  const entries: RoundArchiveEntry[] = rounds.map((round) => {
+    const hands = sortRoundHands(
+      history.filter(
+        (hand) =>
+          hand.trainingRoundId === round.id || round.handIds.includes(hand.id),
+      ),
+    );
+    hands.forEach((hand) => assignedHands.add(hand.id));
+    return {
+      id: round.id,
+      label: labels.get(round.id) ?? '训练轮次',
+      round,
+      hands,
+      legacy: false,
+    };
+  });
+
+  const unmatched = new Map<string, HandRecord[]>();
+  history.forEach((hand) => {
+    if (assignedHands.has(hand.id)) return;
+    const key = hand.trainingRoundId ?? 'legacy-hands';
+    unmatched.set(key, [...(unmatched.get(key) ?? []), hand]);
+  });
+  [...unmatched.entries()].forEach(([id, hands], index) => {
+    const round = aggregateHandsAsRound(id, hands);
+    entries.push({
+      id,
+      label:
+        id === 'legacy-hands'
+          ? '早期手牌记录'
+          : `恢复的训练轮次 ${String(index + 1).padStart(2, '0')}`,
+      round,
+      hands: sortRoundHands(hands),
+      legacy: true,
+    });
+  });
+
+  return entries.sort(
+    (left, right) =>
+      new Date(right.round.startedAt).getTime() -
+      new Date(left.round.startedAt).getTime(),
+  );
+}
+
+function upsertRoundRecord(
+  rounds: TrainingRoundRecord[],
+  nextRound: TrainingRoundRecord,
+) {
+  return [
+    nextRound,
+    ...rounds.filter((round) => round.id !== nextRound.id),
+  ].sort(
+    (left, right) =>
+      new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime(),
+  );
+}
 
 function PokerCard({
   card,
@@ -472,50 +592,55 @@ function ActionControls({
   }
 
   return (
-    <div className="rounded-2xl border border-[#c9ff63]/15 bg-[#111716] p-3 shadow-[0_18px_50px_rgba(0,0,0,.32)]">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+    <div className="rounded-2xl border border-[#c9ff63]/15 bg-[#111716] p-3.5 shadow-[0_18px_50px_rgba(0,0,0,.32)]">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
         <div className="grid grid-cols-2 gap-2 sm:flex">
           <Button
             variant="outline"
             onClick={() => onAction('fold')}
-            className="h-11 border-white/10 bg-white/[.025] px-5 text-white/60 hover:bg-rose-400/10 hover:text-rose-200"
+            className="h-14 min-w-[112px] rounded-xl border-white/10 bg-white/[.025] px-6 text-base font-semibold text-white/65 hover:bg-rose-400/10 hover:text-rose-200 lg:h-auto lg:min-h-[78px]"
           >
             弃牌{' '}
-            <kbd className="ml-1 rounded bg-white/5 px-1 text-[9px] text-white/30">
+            <kbd className="ml-1.5 rounded-md bg-white/5 px-1.5 py-0.5 text-[10px] text-white/30">
               F
             </kbd>
           </Button>
           <Button
             variant="secondary"
             onClick={() => onAction(toCall > 0 ? 'call' : 'check')}
-            className="h-11 bg-white/[.08] px-5 text-white hover:bg-white/[.13]"
+            className="h-14 min-w-[128px] rounded-xl bg-white/[.08] px-6 text-base font-semibold text-white hover:bg-white/[.13] lg:h-auto lg:min-h-[78px]"
           >
             {toCall > 0 ? `跟注 ${Math.min(toCall, hero.stack)}` : '过牌'}{' '}
-            <kbd className="ml-1 rounded bg-black/15 px-1 text-[9px] text-white/35">
+            <kbd className="ml-1.5 rounded-md bg-black/15 px-1.5 py-0.5 text-[10px] text-white/35">
               C
             </kbd>
           </Button>
         </div>
         {canRaise && (
-          <div className="min-w-0 flex-1 rounded-xl border border-white/7 bg-black/10 px-3 py-2">
-            <div className="mb-2 flex items-center gap-1.5">
+          <div className="min-w-0 flex-1 rounded-2xl border border-white/8 bg-black/15 px-4 py-3">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               {[0.5, 0.75, 1].map((factor) => (
                 <button
+                  type="button"
                   key={factor}
                   onClick={() => setPotSizing(factor)}
-                  className="rounded-md px-2 py-1 text-[9px] font-semibold text-white/40 transition hover:bg-white/7 hover:text-white/70"
+                  className="h-10 min-w-[64px] rounded-xl border border-white/8 bg-white/[.045] px-3 text-xs font-semibold text-white/65 transition hover:border-[#c9ff63]/25 hover:bg-[#c9ff63]/10 hover:text-[#ddffa0]"
                 >
                   {factor === 1 ? '满池' : `${factor * 100}%池`}
                 </button>
               ))}
               <button
+                type="button"
                 onClick={() => setRaiseTo(maxRaiseTo)}
-                className="rounded-md px-2 py-1 text-[9px] font-semibold text-amber-200/50 transition hover:bg-amber-300/8 hover:text-amber-200"
+                className="h-10 min-w-[64px] rounded-xl border border-amber-200/10 bg-amber-300/[.055] px-3 text-xs font-semibold text-amber-100/70 transition hover:border-amber-200/25 hover:bg-amber-300/10 hover:text-amber-100"
               >
                 全下
               </button>
-              <span className="ml-auto text-[10px] tabular-nums text-white/40">
-                加注至 <strong className="text-white/75">{raiseTo}</strong>
+              <span className="ml-auto inline-flex min-w-[92px] items-baseline justify-end gap-1.5 tabular-nums text-white/45">
+                <span className="text-xs">加注至</span>
+                <strong className="text-lg font-bold text-white/90">
+                  {raiseTo}
+                </strong>
               </span>
             </div>
             <Slider
@@ -532,10 +657,10 @@ function ActionControls({
         <Button
           disabled={!canRaise}
           onClick={() => onAction('raise', raiseTo)}
-          className="h-11 bg-[#c9ff63] px-5 text-[#10180d] hover:bg-[#d7ff87]"
+          className="h-14 min-w-[152px] rounded-xl bg-[#c9ff63] px-6 text-base font-bold text-[#10180d] shadow-[0_8px_24px_rgba(201,255,99,.14)] hover:bg-[#d7ff87] lg:h-auto lg:min-h-[78px]"
         >
           {game.currentBet === 0 ? `下注 ${raiseTo}` : `加注至 ${raiseTo}`}
-          <kbd className="ml-1 rounded bg-black/10 px-1 text-[9px] text-black/45">
+          <kbd className="ml-1.5 rounded-md bg-black/10 px-1.5 py-0.5 text-[10px] text-black/45">
             R
           </kbd>
         </Button>
@@ -650,6 +775,72 @@ function AdviceView({ advice }: { advice: HandAdvice }) {
   );
 }
 
+function RoundCoachReportView({
+  report,
+  compact = false,
+}: {
+  report: RoundCoachReport;
+  compact?: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-[#c9ff63]/18 bg-[#c9ff63]/[.04] p-4">
+        <div className="flex items-start gap-3">
+          <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#c9ff63] text-xl font-black text-[#11170f]">
+            {report.grade}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#dfff9f]/50">
+              轮次教练总评
+            </p>
+            <p className="mt-1 text-sm font-semibold text-white/85">
+              {report.headline}
+            </p>
+            <p className="mt-1.5 text-[11px] leading-5 text-white/42">
+              {report.summary}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {!compact && (
+        <div className="grid gap-2 md:grid-cols-2">
+          {report.items.map((item, index) => (
+            <div
+              key={`${item.title}-${index}`}
+              className="rounded-xl border border-white/7 bg-white/[.02] p-3.5"
+            >
+              <div className="flex items-center gap-2 text-xs font-semibold text-white/68">
+                <VerdictIcon verdict={item.verdict} />
+                {item.title}
+              </div>
+              <p className="mt-2 text-[11px] leading-5 text-white/38">
+                {item.text}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-sky-300/10 bg-sky-300/[.025] p-4">
+        <div className="flex items-center gap-2">
+          <Lightbulb className="size-4 text-sky-300" />
+          <p className="text-xs font-semibold text-white/70">下一轮教学建议</p>
+        </div>
+        <div className="mt-3 space-y-2">
+          {report.nextSteps.map((step, index) => (
+            <div key={step} className="flex gap-2.5 text-[11px] leading-5">
+              <span className="grid size-5 shrink-0 place-items-center rounded-full bg-sky-300/10 text-[9px] font-bold text-sky-200/70">
+                {index + 1}
+              </span>
+              <span className="text-white/42">{step}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 function LiveCoach({ game }: { game: GameState }) {
   if (game.status === 'complete' && game.advice)
     return <AdviceView advice={game.advice} />;
@@ -777,7 +968,8 @@ function HistoryReview({ record }: { record: HandRecord }) {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-[10px] text-white/30">
-                第 {record.handNumber} 手 ·{' '}
+                本轮第 {record.roundHandNumber ?? record.handNumber} 手 · 总记录
+                #{record.handNumber} ·{' '}
                 {new Date(record.playedAt).toLocaleString('zh-CN', {
                   month: 'short',
                   day: 'numeric',
@@ -905,74 +1097,278 @@ function HistoryReview({ record }: { record: HandRecord }) {
   );
 }
 
+function RoundArchiveReview({
+  entry,
+  selectedHandId,
+  onSelectHand,
+}: {
+  entry: RoundArchiveEntry;
+  selectedHandId: string | null;
+  onSelectHand: (id: string) => void;
+}) {
+  const { round, hands } = entry;
+  const selected =
+    hands.find((hand) => hand.id === selectedHandId) ?? hands[0] ?? null;
+  const report = round.coachReport ?? generateRoundCoachReport(round, hands);
+  const vpip = round.handsPlayed
+    ? Math.round((round.vpipHands / round.handsPlayed) * 100)
+    : 0;
+  const pfr = round.handsPlayed
+    ? Math.round((round.pfrHands / round.handsPlayed) * 100)
+    : 0;
+  const profitBb = round.heroProfit / BIG_BLIND;
+
+  return (
+    <div className="pb-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-semibold text-white/88">
+              {entry.label}
+            </h2>
+            <Badge
+              variant="outline"
+              className={
+                round.status === 'active'
+                  ? 'border-[#c9ff63]/20 text-[#c9ff63]'
+                  : 'border-white/10 text-white/40'
+              }
+            >
+              {round.status === 'active' ? '进行中' : '已完成'}
+            </Badge>
+            {entry.legacy && (
+              <Badge
+                variant="outline"
+                className="border-amber-200/10 text-amber-100/45"
+              >
+                历史记录
+              </Badge>
+            )}
+          </div>
+          <p className="mt-1.5 text-[10px] text-white/28">
+            {new Date(round.startedAt).toLocaleString('zh-CN', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+            {round.endedAt ? ' · 已结束并保存' : ' · 报告随本轮实时更新'}
+          </p>
+        </div>
+        <p
+          className={`text-xl font-semibold tabular-nums ${profitBb >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
+        >
+          {profitBb >= 0 ? '+' : ''}
+          {profitBb.toFixed(1)} BB
+        </p>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+          <MiniStat label="本轮手牌" value={String(round.handsPlayed)} />
+        </div>
+        <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+          <MiniStat label="VPIP" value={`${vpip}%`} />
+        </div>
+        <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+          <MiniStat label="PFR" value={`${pfr}%`} />
+        </div>
+        <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+          <MiniStat
+            label="单手评分"
+            value={`A${round.gradeCounts.A} B${round.gradeCounts.B} C${round.gradeCounts.C}`}
+          />
+        </div>
+      </div>
+
+      <section className="mt-6">
+        <div className="mb-3 flex items-center gap-3">
+          <span className="grid size-7 place-items-center rounded-lg bg-[#c9ff63]/10 text-[10px] font-bold text-[#c9ff63]">
+            01
+          </span>
+          <div>
+            <h3 className="text-sm font-semibold text-white/78">
+              轮次整体报告
+            </h3>
+            <p className="mt-0.5 text-[10px] text-white/28">
+              先看整轮趋势与教学重点，再进入单手细节。
+            </p>
+          </div>
+        </div>
+        <RoundCoachReportView report={report} />
+      </section>
+
+      <section className="mt-8 border-t border-white/8 pt-6">
+        <div className="mb-3 flex items-center gap-3">
+          <span className="grid size-7 place-items-center rounded-lg bg-white/5 text-[10px] font-bold text-white/45">
+            02
+          </span>
+          <div>
+            <h3 className="text-sm font-semibold text-white/78">
+              本轮逐手复盘
+            </h3>
+            <p className="mt-0.5 text-[10px] text-white/28">
+              共 {hands.length} 手可复盘，每手保留独立的牌后建议。
+            </p>
+          </div>
+        </div>
+
+        {hands.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-white/8 p-8 text-center text-xs text-white/30">
+            本轮完成第一手后，这里会出现逐手复盘。
+          </div>
+        ) : (
+          <>
+            <div className="-mx-1 overflow-x-auto px-1 pb-2">
+              <div className="flex min-w-max gap-2">
+                {hands.map((hand, index) => (
+                  <button
+                    type="button"
+                    key={hand.id}
+                    onClick={() => onSelectHand(hand.id)}
+                    className={`min-w-[132px] rounded-xl border px-3 py-2.5 text-left transition ${selected?.id === hand.id ? 'border-[#c9ff63]/25 bg-[#c9ff63]/[.055]' : 'border-white/7 bg-white/[.018] hover:border-white/14 hover:bg-white/[.035]'}`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-semibold text-white/55">
+                        本轮第 {hand.roundHandNumber ?? index + 1} 手
+                      </span>
+                      <span
+                        className={`text-[10px] font-bold tabular-nums ${hand.heroProfit >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
+                      >
+                        {hand.heroProfit >= 0 ? '+' : ''}
+                        {hand.heroProfit}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm font-bold tracking-wide text-white/72">
+                      {hand.heroCards.map(cardText).join('  ')}
+                    </p>
+                    <p className="mt-1 text-[9px] text-white/25">
+                      底池 {hand.pot} · 评分 {hand.advice.grade}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-4">
+              {selected && <HistoryReview record={selected} />}
+            </div>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
 function HistoryDialog({
   open,
   onOpenChange,
   history,
-  selectedId,
-  onSelect,
+  rounds,
+  selectedRoundId,
+  selectedHandId,
+  onSelectRound,
+  onSelectHand,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   history: HandRecord[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
+  rounds: TrainingRoundRecord[];
+  selectedRoundId: string | null;
+  selectedHandId: string | null;
+  onSelectRound: (roundId: string, handId: string | null) => void;
+  onSelectHand: (id: string) => void;
 }) {
-  const selected =
-    history.find((record) => record.id === selectedId) ?? history[0];
+  const entries = useMemo(
+    () => buildRoundArchive(rounds, history),
+    [history, rounds],
+  );
+  const selectedEntry =
+    entries.find((entry) => entry.id === selectedRoundId) ??
+    entries.find((entry) =>
+      entry.hands.some((hand) => hand.id === selectedHandId),
+    ) ??
+    entries[0];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-[min(1180px,calc(100%-24px))] overflow-hidden border border-white/10 bg-[#09100e] p-0 text-white shadow-2xl sm:max-w-[min(1180px,calc(100%-32px))]">
+      <DialogContent className="max-h-[94vh] max-w-[min(1280px,calc(100%-24px))] overflow-hidden border border-white/10 bg-[#09100e] p-0 text-white shadow-2xl sm:max-w-[min(1280px,calc(100%-32px))]">
         <DialogHeader className="border-b border-white/8 px-5 py-4">
           <DialogTitle className="flex items-center gap-2 text-base text-white/85">
-            <History className="size-4 text-[#c9ff63]" /> 手牌档案
+            <History className="size-4 text-[#c9ff63]" /> 训练档案
           </DialogTitle>
           <DialogDescription className="text-[10px] text-white/30">
-            每位玩家的手牌、行动、Bot 决策注释与训练建议均保存在这里。
+            先按训练轮次查看整体报告与教学建议，再进入该轮的逐手复盘。
           </DialogDescription>
         </DialogHeader>
-        {history.length === 0 ? (
+
+        {entries.length === 0 ? (
           <div className="grid min-h-[420px] place-items-center p-10 text-center">
             <div>
               <History className="mx-auto size-7 text-white/15" />
               <p className="mt-3 text-sm text-white/45">
-                完成第一手后，这里会出现详细记录。
+                完成一个训练轮次后，这里会出现轮次报告和逐手记录。
               </p>
             </div>
           </div>
         ) : (
-          <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[190px_minmax(0,1fr)]">
-            <ScrollArea className="h-[calc(92vh-86px)] border-r border-white/8 bg-white/[.012] p-3">
-              <div className="space-y-1.5 pr-2">
-                {history.map((record) => (
-                  <button
-                    key={record.id}
-                    onClick={() => onSelect(record.id)}
-                    className={`w-full rounded-xl border p-3 text-left transition ${selected?.id === record.id ? 'border-[#c9ff63]/20 bg-[#c9ff63]/[.05]' : 'border-transparent hover:border-white/7 hover:bg-white/[.025]'}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-semibold text-white/60">
-                        第 {record.handNumber} 手
-                      </span>
-                      <span
-                        className={`text-[10px] font-semibold tabular-nums ${record.heroProfit >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
-                      >
-                        {record.heroProfit >= 0 ? '+' : ''}
-                        {record.heroProfit}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex items-center gap-1 text-[10px] font-bold text-white/45">
-                      {record.heroCards.map(cardText).join(' ')}
-                    </div>
-                    <div className="mt-1.5 truncate text-[8px] text-white/22">
-                      底池 {record.pot} · {record.showdown ? '摊牌' : '未摊牌'}
-                    </div>
-                  </button>
-                ))}
+          <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[230px_minmax(0,1fr)]">
+            <ScrollArea className="h-[155px] border-b border-white/8 bg-white/[.012] p-3 md:h-[calc(94vh-86px)] md:border-r md:border-b-0">
+              <div className="flex min-w-max gap-2 pr-2 md:block md:min-w-0 md:space-y-2">
+                {entries.map((entry) => {
+                  const profitBb = entry.round.heroProfit / BIG_BLIND;
+                  return (
+                    <button
+                      type="button"
+                      key={entry.id}
+                      onClick={() =>
+                        onSelectRound(entry.id, entry.hands[0]?.id ?? null)
+                      }
+                      className={`w-[190px] rounded-xl border p-3 text-left transition md:w-full ${selectedEntry?.id === entry.id ? 'border-[#c9ff63]/22 bg-[#c9ff63]/[.055]' : 'border-transparent bg-white/[.012] hover:border-white/8 hover:bg-white/[.03]'}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold text-white/68">
+                          {entry.label}
+                        </span>
+                        <span
+                          className={`size-1.5 rounded-full ${entry.round.status === 'active' ? 'animate-pulse bg-[#c9ff63]' : 'bg-white/18'}`}
+                        />
+                      </div>
+                      <div className="mt-2 flex items-end justify-between gap-3">
+                        <div>
+                          <p className="text-[9px] text-white/25">
+                            {entry.round.handsPlayed} 手牌
+                          </p>
+                          <p className="mt-1 text-[9px] text-white/20">
+                            {new Date(entry.round.startedAt).toLocaleDateString(
+                              'zh-CN',
+                              {
+                                month: 'short',
+                                day: 'numeric',
+                              },
+                            )}
+                          </p>
+                        </div>
+                        <span
+                          className={`text-sm font-bold tabular-nums ${profitBb >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
+                        >
+                          {profitBb >= 0 ? '+' : ''}
+                          {profitBb.toFixed(1)} BB
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </ScrollArea>
-            <ScrollArea className="h-[calc(92vh-86px)] p-5">
-              {selected && <HistoryReview record={selected} />}
+
+            <ScrollArea className="h-[calc(94vh-241px)] p-4 sm:p-5 md:h-[calc(94vh-86px)]">
+              {selectedEntry && (
+                <RoundArchiveReview
+                  entry={selectedEntry}
+                  selectedHandId={selectedHandId}
+                  onSelectHand={onSelectHand}
+                />
+              )}
             </ScrollArea>
           </div>
         )}
@@ -985,12 +1381,14 @@ function RoundSummaryDialog({
   open,
   onOpenChange,
   round,
+  hands,
   onStartNew,
   onOpenHistory,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   round: TrainingRoundRecord | null;
+  hands: HandRecord[];
   onStartNew: () => void;
   onOpenHistory: () => void;
 }) {
@@ -1001,75 +1399,77 @@ function RoundSummaryDialog({
   const pfr = round.handsPlayed
     ? Math.round((round.pfrHands / round.handsPlayed) * 100)
     : 0;
-  const winRate = round.handsPlayed
-    ? Math.round((round.wins / round.handsPlayed) * 100)
-    : 0;
   const profitBb = round.heroProfit / BIG_BLIND;
+  const report = round.coachReport ?? generateRoundCoachReport(round, hands);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[min(520px,calc(100%-24px))] border border-white/10 bg-[#09100e] p-0 text-white shadow-2xl sm:max-w-[520px]">
+      <DialogContent className="max-h-[92vh] max-w-[min(640px,calc(100%-24px))] overflow-hidden border border-white/10 bg-[#09100e] p-0 text-white shadow-2xl sm:max-w-[640px]">
         <DialogHeader className="border-b border-white/8 px-5 py-4">
           <DialogTitle className="flex items-center gap-2 text-base text-white/85">
             <Flag className="size-4 text-[#c9ff63]" />
             本轮训练完成
           </DialogTitle>
           <DialogDescription className="text-[10px] text-white/30">
-            共完成 {round.handsPlayed} 手，所有手牌与决策记录均已保存。
+            共完成 {round.handsPlayed} 手。先查看轮次总评，再进入逐手复盘。
           </DialogDescription>
         </DialogHeader>
-        <div className="p-5">
-          <div className="rounded-2xl border border-[#c9ff63]/15 bg-[#c9ff63]/[.035] p-4">
-            <p className="text-[10px] text-white/30">本轮盈亏</p>
-            <p
-              className={`mt-1 text-3xl font-semibold tabular-nums ${profitBb >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
-            >
-              {profitBb >= 0 ? '+' : ''}
-              {profitBb.toFixed(1)} BB
-            </p>
-            <p className="mt-1 text-[10px] text-white/28">
-              结果用于记录波动，训练评价仍应以决策质量为主。
-            </p>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
-              <MiniStat label="手牌" value={String(round.handsPlayed)} />
+        <ScrollArea className="max-h-[calc(92vh-82px)]">
+          <div className="p-5">
+            <RoundCoachReportView report={report} compact />
+
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+                <MiniStat label="本轮手牌" value={String(round.handsPlayed)} />
+              </div>
+              <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+                <MiniStat
+                  label="本轮盈亏"
+                  value={`${profitBb >= 0 ? '+' : ''}${profitBb.toFixed(1)} BB`}
+                  tone={
+                    profitBb > 0
+                      ? 'positive'
+                      : profitBb < 0
+                        ? 'negative'
+                        : undefined
+                  }
+                />
+              </div>
+              <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+                <MiniStat label="VPIP" value={`${vpip}%`} />
+              </div>
+              <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+                <MiniStat label="PFR" value={`${pfr}%`} />
+              </div>
             </div>
-            <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
-              <MiniStat label="VPIP" value={`${vpip}%`} />
+
+            <div className="mt-3 flex items-center justify-between rounded-xl border border-white/7 bg-white/[.018] px-3 py-2.5 text-[10px]">
+              <span className="text-white/35">逐手评分</span>
+              <span className="tabular-nums text-white/60">
+                A {round.gradeCounts.A} · B {round.gradeCounts.B} · C{' '}
+                {round.gradeCounts.C}
+              </span>
             </div>
-            <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
-              <MiniStat label="PFR" value={`${pfr}%`} />
-            </div>
-            <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
-              <MiniStat label="胜率" value={`${winRate}%`} />
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={onOpenHistory}
+                className="border-white/10 bg-white/[.025] text-white/65 hover:bg-white/[.06] hover:text-white"
+              >
+                <History data-icon="inline-start" />
+                查看本轮完整档案
+              </Button>
+              <Button
+                onClick={onStartNew}
+                className="bg-[#c9ff63] text-[#10180d] hover:bg-[#d7ff87]"
+              >
+                <Play data-icon="inline-start" className="fill-current" />
+                开始新轮次
+              </Button>
             </div>
           </div>
-          <div className="mt-3 flex items-center justify-between rounded-xl border border-white/7 bg-white/[.018] px-3 py-2.5 text-[10px]">
-            <span className="text-white/35">牌后评分</span>
-            <span className="tabular-nums text-white/60">
-              A {round.gradeCounts.A} · B {round.gradeCounts.B} · C{' '}
-              {round.gradeCounts.C}
-            </span>
-          </div>
-          <div className="mt-5 flex flex-wrap justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={onOpenHistory}
-              className="border-white/10 bg-white/[.025] text-white/65 hover:bg-white/[.06] hover:text-white"
-            >
-              <History data-icon="inline-start" />
-              查看手牌档案
-            </Button>
-            <Button
-              onClick={onStartNew}
-              className="bg-[#c9ff63] text-[#10180d] hover:bg-[#d7ff87]"
-            >
-              <Play data-icon="inline-start" className="fill-current" />
-              开始新轮次
-            </Button>
-          </div>
-        </div>
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );
@@ -1078,12 +1478,14 @@ function RoundSummaryDialog({
 export default function PokerTrainer() {
   const [game, setGame] = useState<GameState>(() => createReadyGame());
   const [history, setHistory] = useState<HandRecord[]>([]);
+  const [rounds, setRounds] = useState<TrainingRoundRecord[]>([]);
   const [sessionId, setSessionId] = useState('');
   const [storageState, setStorageState] = useState<
     'loading' | 'ready' | 'saving' | 'error'
   >('loading');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
   const [activeRound, setActiveRound] = useState<TrainingRoundRecord | null>(
     null,
   );
@@ -1123,6 +1525,7 @@ export default function PokerTrainer() {
       .then(([{ hands }, { rounds }]) => {
         if (!active) return;
         setHistory(hands);
+        setRounds(rounds);
         hands.forEach((record) => savedHands.current.add(record.id));
         const newest = hands[0];
         if (newest) {
@@ -1223,7 +1626,11 @@ export default function PokerTrainer() {
     const updatedRound = activeRound
       ? appendHandToRound(activeRound, record)
       : null;
-    if (updatedRound) setActiveRound(updatedRound);
+    if (updatedRound) {
+      setActiveRound(updatedRound);
+      setRounds((current) => upsertRoundRecord(current, updatedRound));
+      setSelectedRoundId(updatedRound.id);
+    }
     setHistory((current) => [
       record,
       ...current.filter((item) => item.id !== record.id),
@@ -1254,10 +1661,17 @@ export default function PokerTrainer() {
       return;
 
     if (roundEndRequested) {
-      const completed = completeTrainingRound(activeRound);
+      const roundHands = history.filter(
+        (hand) =>
+          hand.trainingRoundId === activeRound.id ||
+          activeRound.handIds.includes(hand.id),
+      );
+      const completed = completeTrainingRound(activeRound, roundHands);
+      setRounds((current) => upsertRoundRecord(current, completed));
       roundStartLocked.current = false;
       setActiveRound(null);
       setLastRound(completed);
+      setSelectedRoundId(completed.id);
       setRoundEndRequested(false);
       setAutoNextCountdown(null);
       setRoundSummaryOpen(true);
@@ -1284,7 +1698,14 @@ export default function PokerTrainer() {
       window.clearInterval(interval);
       window.clearTimeout(timeout);
     };
-  }, [activeRound, game.handId, game.status, roundEndRequested, saveRound]);
+  }, [
+    activeRound,
+    game.handId,
+    game.status,
+    history,
+    roundEndRequested,
+    saveRound,
+  ]);
 
   const displayedRound = activeRound ?? lastRound;
   const stats = useMemo(() => {
@@ -1301,6 +1722,23 @@ export default function PokerTrainer() {
     return { count, profit, vpip, pfr };
   }, [displayedRound]);
 
+  const archiveRoundCount = useMemo(
+    () => buildRoundArchive(rounds, history).length,
+    [history, rounds],
+  );
+  const lastRoundHands = useMemo(
+    () =>
+      lastRound
+        ? sortRoundHands(
+            history.filter(
+              (hand) =>
+                hand.trainingRoundId === lastRound.id ||
+                lastRound.handIds.includes(hand.id),
+            ),
+          )
+        : [],
+    [history, lastRound],
+  );
   const handleAction = useCallback(
     (type: 'fold' | 'check' | 'call' | 'raise', raiseTo?: number) => {
       setGame((current) => applyAction(current, 0, { type, raiseTo }));
@@ -1314,6 +1752,9 @@ export default function PokerTrainer() {
     const round = createTrainingRound(sessionId);
     resumedRound.current = round.id;
     setActiveRound(round);
+    setRounds((current) => upsertRoundRecord(current, round));
+    setSelectedRoundId(round.id);
+    setSelectedId(null);
     setRoundEndRequested(false);
     setAutoNextCountdown(null);
     setRoundSummaryOpen(false);
@@ -1347,7 +1788,12 @@ export default function PokerTrainer() {
   const openCurrentReview = () => {
     const record =
       history.find((item) => item.id === game.handId) ?? history[0];
-    if (record) setSelectedId(record.id);
+    if (record) {
+      setSelectedId(record.id);
+      setSelectedRoundId(record.trainingRoundId ?? 'legacy-hands');
+    } else if (activeRound) {
+      setSelectedRoundId(activeRound.id);
+    }
     setHistoryOpen(true);
   };
 
@@ -1397,10 +1843,10 @@ export default function PokerTrainer() {
             className="border-white/10 bg-white/[.025] text-white/60 hover:bg-white/[.06] hover:text-white"
           >
             <History data-icon="inline-start" />
-            手牌档案
-            {history.length > 0 && (
+            训练档案
+            {archiveRoundCount > 0 && (
               <span className="ml-1 rounded-full bg-[#c9ff63]/12 px-1.5 text-[9px] text-[#c9ff63]">
-                {history.length}
+                {archiveRoundCount}
               </span>
             )}
           </Button>
@@ -1559,18 +2005,25 @@ export default function PokerTrainer() {
         open={historyOpen}
         onOpenChange={setHistoryOpen}
         history={history}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
+        rounds={rounds}
+        selectedRoundId={selectedRoundId}
+        selectedHandId={selectedId}
+        onSelectRound={(roundId, handId) => {
+          setSelectedRoundId(roundId);
+          setSelectedId(handId);
+        }}
+        onSelectHand={setSelectedId}
       />
       <RoundSummaryDialog
         open={roundSummaryOpen}
         onOpenChange={setRoundSummaryOpen}
         round={lastRound}
+        hands={lastRoundHands}
         onStartNew={handleStartRound}
         onOpenHistory={() => {
-          const latestRoundHandId =
-            lastRound?.handIds[lastRound.handIds.length - 1];
-          if (latestRoundHandId) setSelectedId(latestRoundHandId);
+          if (lastRound) setSelectedRoundId(lastRound.id);
+          const latestRoundHand = lastRoundHands[lastRoundHands.length - 1];
+          if (latestRoundHand) setSelectedId(latestRoundHand.id);
           setRoundSummaryOpen(false);
           setHistoryOpen(true);
         }}
