@@ -20,16 +20,39 @@ const CREATE_SESSION_INDEX_SQL = `
   ON hand_histories (session_id, played_at)
 `;
 
-async function ensureSchema() {
+const CREATE_ROUNDS_SQL = `
+  CREATE TABLE IF NOT EXISTS training_rounds (
+    id TEXT PRIMARY KEY NOT NULL,
+    session_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    status TEXT NOT NULL,
+    hands_played INTEGER NOT NULL,
+    hero_profit INTEGER NOT NULL,
+    record_json TEXT NOT NULL
+  )
+`;
+
+const CREATE_ROUND_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS idx_training_rounds_session_started
+  ON training_rounds (session_id, started_at)
+`;
+
+export async function ensureSchema() {
   if (!env.DB) throw new Error('牌局数据库尚未连接');
   await env.DB.batch([
     env.DB.prepare(CREATE_HANDS_SQL),
     env.DB.prepare(CREATE_SESSION_INDEX_SQL),
+    env.DB.prepare(CREATE_ROUNDS_SQL),
+    env.DB.prepare(CREATE_ROUND_INDEX_SQL),
     env.DB.prepare('PRAGMA optimize'),
   ]);
 }
 
-export async function listHandRecords(sessionId: string, limit = 100): Promise<HandRecord[]> {
+export async function listHandRecords(
+  sessionId: string,
+  limit = 100,
+): Promise<HandRecord[]> {
   await ensureSchema();
   const result = await env.DB.prepare(
     `SELECT record_json FROM hand_histories

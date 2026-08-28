@@ -3,7 +3,20 @@ export const BIG_BLIND = 10;
 export const STARTING_STACK = 500;
 
 export type Suit = 's' | 'h' | 'd' | 'c';
-export type Rank = '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'T' | 'J' | 'Q' | 'K' | 'A';
+export type Rank =
+  | '2'
+  | '3'
+  | '4'
+  | '5'
+  | '6'
+  | '7'
+  | '8'
+  | '9'
+  | 'T'
+  | 'J'
+  | 'Q'
+  | 'K'
+  | 'A';
 export type Street = 'preflop' | 'flop' | 'turn' | 'river';
 export type GameStatus = 'ready' | 'playing' | 'complete';
 export type ActionType =
@@ -104,6 +117,8 @@ export interface HandRecord {
   id: string;
   sessionId: string;
   handNumber: number;
+  trainingRoundId: string | null;
+  roundHandNumber: number | null;
   playedAt: string;
   blinds: string;
   dealerIndex: number;
@@ -133,7 +148,41 @@ export interface HandRecord {
   };
 }
 
-const RANKS: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
+export interface TrainingRoundRecord {
+  id: string;
+  sessionId: string;
+  startedAt: string;
+  endedAt: string | null;
+  status: 'active' | 'completed';
+  handIds: string[];
+  handsPlayed: number;
+  heroProfit: number;
+  vpipHands: number;
+  pfrHands: number;
+  showdownHands: number;
+  wins: number;
+  gradeCounts: {
+    A: number;
+    B: number;
+    C: number;
+  };
+}
+
+const RANKS: Rank[] = [
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  'T',
+  'J',
+  'Q',
+  'K',
+  'A',
+];
 const SUITS: Suit[] = ['s', 'h', 'd', 'c'];
 const RANK_VALUE: Record<Rank, number> = {
   '2': 2,
@@ -158,12 +207,49 @@ const STREET_NAMES: Record<Street, string> = {
   river: '河牌',
 };
 
-const PLAYER_BLUEPRINTS: Array<Pick<Player, 'id' | 'name' | 'shortName' | 'style' | 'styleKey' | 'isHero'>> = [
-  { id: 'hero', name: 'Hero', shortName: '你', style: '训练中', styleKey: 'hero', isHero: true },
-  { id: 'rock', name: '岩石', shortName: '岩', style: '紧手', styleKey: 'rock', isHero: false },
-  { id: 'balanced', name: '阿凌', shortName: '凌', style: '平衡', styleKey: 'balanced', isHero: false },
-  { id: 'aggro', name: '火花', shortName: '火', style: '激进', styleKey: 'aggro', isHero: false },
-  { id: 'station', name: '老K', shortName: 'K', style: '跟注站', styleKey: 'station', isHero: false },
+const PLAYER_BLUEPRINTS: Array<
+  Pick<Player, 'id' | 'name' | 'shortName' | 'style' | 'styleKey' | 'isHero'>
+> = [
+  {
+    id: 'hero',
+    name: 'Hero',
+    shortName: '你',
+    style: '训练中',
+    styleKey: 'hero',
+    isHero: true,
+  },
+  {
+    id: 'rock',
+    name: '岩石',
+    shortName: '岩',
+    style: '紧手',
+    styleKey: 'rock',
+    isHero: false,
+  },
+  {
+    id: 'balanced',
+    name: '阿凌',
+    shortName: '凌',
+    style: '平衡',
+    styleKey: 'balanced',
+    isHero: false,
+  },
+  {
+    id: 'aggro',
+    name: '火花',
+    shortName: '火',
+    style: '激进',
+    styleKey: 'aggro',
+    isHero: false,
+  },
+  {
+    id: 'station',
+    name: '老K',
+    shortName: 'K',
+    style: '跟注站',
+    styleKey: 'station',
+    isHero: false,
+  },
 ];
 
 function makeId(prefix: string) {
@@ -232,7 +318,13 @@ function takeCard(deck: Card[]) {
   return card;
 }
 
-function postBlind(players: Player[], index: number, amount: number, type: 'small-blind' | 'big-blind', actions: GameAction[]) {
+function postBlind(
+  players: Player[],
+  index: number,
+  amount: number,
+  type: 'small-blind' | 'big-blind',
+  actions: GameAction[],
+) {
   const player = players[index];
   const paid = Math.min(player.stack, amount);
   player.stack -= paid;
@@ -262,11 +354,20 @@ function findNextEligible(players: Player[], fromIndex: number) {
   return -1;
 }
 
-function findNextPending(players: Player[], fromIndex: number, currentBet: number) {
+function findNextPending(
+  players: Player[],
+  fromIndex: number,
+  currentBet: number,
+) {
   for (let step = 1; step <= players.length; step += 1) {
     const index = (fromIndex + step) % players.length;
     const player = players[index];
-    if (!player.folded && !player.allIn && (!player.acted || player.streetBet < currentBet)) return index;
+    if (
+      !player.folded &&
+      !player.allIn &&
+      (!player.acted || player.streetBet < currentBet)
+    )
+      return index;
   }
   return -1;
 }
@@ -310,7 +411,10 @@ export function startNextHand(previous: GameState): GameState {
     deck,
     board: [],
     street: 'preflop',
-    currentBet: Math.max(players[smallBlindIndex].streetBet, players[bigBlindIndex].streetBet),
+    currentBet: Math.max(
+      players[smallBlindIndex].streetBet,
+      players[bigBlindIndex].streetBet,
+    ),
     minRaise: BIG_BLIND,
     actingIndex: findNextEligible(players, bigBlindIndex),
     actions,
@@ -329,7 +433,9 @@ export function getPotFromPlayers(players: Player[]) {
 }
 
 export function getPot(state: GameState) {
-  return state.status === 'complete' ? state.finalPot : getPotFromPlayers(state.players);
+  return state.status === 'complete'
+    ? state.finalPot
+    : getPotFromPlayers(state.players);
 }
 
 export function getToCall(state: GameState, playerIndex = state.actingIndex) {
@@ -340,7 +446,10 @@ export function getToCall(state: GameState, playerIndex = state.actingIndex) {
 function cloneGame(state: GameState): GameState {
   return {
     ...state,
-    players: state.players.map((player) => ({ ...player, holeCards: [...player.holeCards] })),
+    players: state.players.map((player) => ({
+      ...player,
+      holeCards: [...player.holeCards],
+    })),
     startingStacks: [...state.startingStacks],
     deck: [...state.deck],
     board: [...state.board],
@@ -355,7 +464,8 @@ export function applyAction(
   playerIndex: number,
   decision: Pick<BotDecision, 'type' | 'raiseTo'> & { reason?: string },
 ): GameState {
-  if (current.status !== 'playing' || current.actingIndex !== playerIndex) return current;
+  if (current.status !== 'playing' || current.actingIndex !== playerIndex)
+    return current;
   const state = cloneGame(current);
   const player = state.players[playerIndex];
   const toCall = Math.max(0, state.currentBet - player.streetBet);
@@ -383,11 +493,21 @@ export function applyAction(
     player.lastAction = player.allIn ? `跟注全下 ${amount}` : `跟注 ${amount}`;
   } else if (decision.type === 'raise') {
     const maxTo = player.streetBet + player.stack;
-    const minimumTo = state.currentBet === 0 ? BIG_BLIND : state.currentBet + state.minRaise;
-    const requestedTo = Math.max(state.currentBet + 1, Math.round(decision.raiseTo ?? minimumTo));
-    const target = Math.min(maxTo, Math.max(requestedTo, Math.min(minimumTo, maxTo)));
+    const minimumTo =
+      state.currentBet === 0 ? BIG_BLIND : state.currentBet + state.minRaise;
+    const requestedTo = Math.max(
+      state.currentBet + 1,
+      Math.round(decision.raiseTo ?? minimumTo),
+    );
+    const target = Math.min(
+      maxTo,
+      Math.max(requestedTo, Math.min(minimumTo, maxTo)),
+    );
     if (target <= state.currentBet) {
-      return applyAction(current, playerIndex, { type: toCall > 0 ? 'call' : 'check', reason: decision.reason });
+      return applyAction(current, playerIndex, {
+        type: toCall > 0 ? 'call' : 'check',
+        reason: decision.reason,
+      });
     }
     amount = target - player.streetBet;
     const raiseSize = target - state.currentBet;
@@ -401,14 +521,18 @@ export function applyAction(
     if (raiseSize >= state.minRaise) state.minRaise = raiseSize;
     state.currentBet = target;
     state.players.forEach((other, index) => {
-      if (index !== playerIndex && !other.folded && !other.allIn) other.acted = false;
+      if (index !== playerIndex && !other.folded && !other.allIn)
+        other.acted = false;
     });
     player.lastAction = player.allIn
       ? `全下至 ${target}`
       : `${type === 'bet' ? '下注' : '加注至'} ${target}`;
   }
 
-  const actionLabel: Record<'fold' | 'check' | 'call' | 'bet' | 'raise', string> = {
+  const actionLabel: Record<
+    'fold' | 'check' | 'call' | 'bet' | 'raise',
+    string
+  > = {
     fold: '弃牌',
     check: '过牌',
     call: player.allIn ? `跟注全下 ${amount}` : `跟注 ${amount}`,
@@ -432,15 +556,26 @@ export function applyAction(
   return settleAfterAction(state, playerIndex);
 }
 
-function settleAfterAction(state: GameState, lastActorIndex: number): GameState {
+function settleAfterAction(
+  state: GameState,
+  lastActorIndex: number,
+): GameState {
   const livePlayers = state.players.filter((player) => !player.folded);
   if (livePlayers.length === 1) return awardUncontested(state, livePlayers[0]);
 
-  const eligible = state.players.filter((player) => !player.folded && !player.allIn);
-  const roundComplete = eligible.every((player) => player.acted && player.streetBet === state.currentBet);
+  const eligible = state.players.filter(
+    (player) => !player.folded && !player.allIn,
+  );
+  const roundComplete = eligible.every(
+    (player) => player.acted && player.streetBet === state.currentBet,
+  );
 
   if (!roundComplete) {
-    state.actingIndex = findNextPending(state.players, lastActorIndex, state.currentBet);
+    state.actingIndex = findNextPending(
+      state.players,
+      lastActorIndex,
+      state.currentBet,
+    );
     return state;
   }
 
@@ -485,10 +620,15 @@ function advanceStreet(state: GameState): GameState {
   };
   dealStreet(state, nextStreet[state.street as Exclude<Street, 'river'>]);
 
-  const canAct = state.players.filter((player) => !player.folded && !player.allIn);
+  const canAct = state.players.filter(
+    (player) => !player.folded && !player.allIn,
+  );
   if (canAct.length <= 1) {
     while (state.street !== 'river') {
-      const following: Record<Exclude<Street, 'river' | 'preflop'>, Street> = { flop: 'turn', turn: 'river' };
+      const following: Record<Exclude<Street, 'river' | 'preflop'>, Street> = {
+        flop: 'turn',
+        turn: 'river',
+      };
       dealStreet(state, following[state.street as 'flop' | 'turn']);
     }
     return resolveShowdown(state);
@@ -536,30 +676,58 @@ function compareValues(a: number[], b: number[]) {
 }
 
 function evaluateFive(cards: Card[]): EvaluatedHand {
-  const ranks = cards.map((card) => RANK_VALUE[card.rank]).sort((a, b) => b - a);
+  const ranks = cards
+    .map((card) => RANK_VALUE[card.rank])
+    .sort((a, b) => b - a);
   const counts = new Map<number, number>();
   ranks.forEach((rank) => counts.set(rank, (counts.get(rank) ?? 0) + 1));
-  const groups = [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0]);
+  const groups = [...counts.entries()].sort(
+    (a, b) => b[1] - a[1] || b[0] - a[0],
+  );
   const flush = cards.every((card) => card.suit === cards[0].suit);
   const unique = [...new Set(ranks)];
   let straightHigh = 0;
-  if (unique.length === 5 && unique[0] - unique[4] === 4) straightHigh = unique[0];
+  if (unique.length === 5 && unique[0] - unique[4] === 4)
+    straightHigh = unique[0];
   if (unique.join(',') === '14,5,4,3,2') straightHigh = 5;
 
-  if (flush && straightHigh) return { values: [8, straightHigh], name: '同花顺' };
-  if (groups[0][1] === 4) return { values: [7, groups[0][0], groups[1][0]], name: '四条' };
-  if (groups[0][1] === 3 && groups[1][1] === 2) return { values: [6, groups[0][0], groups[1][0]], name: '葫芦' };
+  if (flush && straightHigh)
+    return { values: [8, straightHigh], name: '同花顺' };
+  if (groups[0][1] === 4)
+    return { values: [7, groups[0][0], groups[1][0]], name: '四条' };
+  if (groups[0][1] === 3 && groups[1][1] === 2)
+    return { values: [6, groups[0][0], groups[1][0]], name: '葫芦' };
   if (flush) return { values: [5, ...ranks], name: '同花' };
   if (straightHigh) return { values: [4, straightHigh], name: '顺子' };
   if (groups[0][1] === 3) {
-    return { values: [3, groups[0][0], ...groups.slice(1).map(([rank]) => rank).sort((a, b) => b - a)], name: '三条' };
+    return {
+      values: [
+        3,
+        groups[0][0],
+        ...groups
+          .slice(1)
+          .map(([rank]) => rank)
+          .sort((a, b) => b - a),
+      ],
+      name: '三条',
+    };
   }
   if (groups[0][1] === 2 && groups[1][1] === 2) {
     const pairs = [groups[0][0], groups[1][0]].sort((a, b) => b - a);
     return { values: [2, ...pairs, groups[2][0]], name: '两对' };
   }
   if (groups[0][1] === 2) {
-    return { values: [1, groups[0][0], ...groups.slice(1).map(([rank]) => rank).sort((a, b) => b - a)], name: '一对' };
+    return {
+      values: [
+        1,
+        groups[0][0],
+        ...groups
+          .slice(1)
+          .map(([rank]) => rank)
+          .sort((a, b) => b - a),
+      ],
+      name: '一对',
+    };
   }
   return { values: [0, ...ranks], name: '高牌' };
 }
@@ -584,24 +752,37 @@ export function bestHand(cards: Card[]): EvaluatedHand {
   let best: EvaluatedHand | null = null;
   combinations(cards, 5).forEach((combo) => {
     const evaluated = evaluateFive(combo);
-    if (!best || compareValues(evaluated.values, best.values) > 0) best = evaluated;
+    if (!best || compareValues(evaluated.values, best.values) > 0)
+      best = evaluated;
   });
   return best ?? { values: [0], name: '高牌' };
 }
 
 function resolveShowdown(state: GameState): GameState {
   const pot = getPotFromPlayers(state.players);
-  const levels = [...new Set(state.players.map((player) => player.totalBet).filter((amount) => amount > 0))].sort((a, b) => a - b);
+  const levels = [
+    ...new Set(
+      state.players
+        .map((player) => player.totalBet)
+        .filter((amount) => amount > 0),
+    ),
+  ].sort((a, b) => a - b);
   const evaluations = new Map<string, EvaluatedHand>();
   state.players.forEach((player) => {
-    if (!player.folded) evaluations.set(player.id, bestHand([...player.holeCards, ...state.board]));
+    if (!player.folded)
+      evaluations.set(
+        player.id,
+        bestHand([...player.holeCards, ...state.board]),
+      );
   });
 
   let previousLevel = 0;
   const sidePots: SidePotResult[] = [];
   const winnerIds = new Set<string>();
   levels.forEach((level) => {
-    const contributors = state.players.filter((player) => player.totalBet >= level);
+    const contributors = state.players.filter(
+      (player) => player.totalBet >= level,
+    );
     const amount = (level - previousLevel) * contributors.length;
     previousLevel = level;
     const eligible = contributors.filter((player) => !player.folded);
@@ -618,8 +799,11 @@ function resolveShowdown(state: GameState): GameState {
     winners.sort((a, b) => {
       const ai = state.players.findIndex((player) => player.id === a.id);
       const bi = state.players.findIndex((player) => player.id === b.id);
-      return ((ai - state.dealerIndex + state.players.length) % state.players.length)
-        - ((bi - state.dealerIndex + state.players.length) % state.players.length);
+      return (
+        ((ai - state.dealerIndex + state.players.length) %
+          state.players.length) -
+        ((bi - state.dealerIndex + state.players.length) % state.players.length)
+      );
     });
     const share = Math.floor(amount / winners.length);
     let remainder = amount % winners.length;
@@ -637,7 +821,12 @@ function resolveShowdown(state: GameState): GameState {
 
   const winners = state.players.filter((player) => winnerIds.has(player.id));
   winners.forEach((winner) => {
-    const won = winner.stack - state.startingStacks[state.players.findIndex((player) => player.id === winner.id)] + winner.totalBet;
+    const won =
+      winner.stack -
+      state.startingStacks[
+        state.players.findIndex((player) => player.id === winner.id)
+      ] +
+      winner.totalBet;
     winner.lastAction = `摊牌赢得 ${Math.max(0, won)}`;
   });
   state.finalPot = pot;
@@ -690,22 +879,33 @@ function postflopStrength(player: Player, board: Card[]) {
   let score = categoryBase;
   if (category === 1) score += Math.max(0, (evaluated.values[1] - 8) * 1.5);
   const suitCounts = new Map<Suit, number>();
-  cards.forEach((card) => suitCounts.set(card.suit, (suitCounts.get(card.suit) ?? 0) + 1));
+  cards.forEach((card) =>
+    suitCounts.set(card.suit, (suitCounts.get(card.suit) ?? 0) + 1),
+  );
   if ([...suitCounts.values()].some((count) => count === 4)) score += 8;
-  const uniqueRanks = [...new Set(cards.map((card) => RANK_VALUE[card.rank]))].sort((a, b) => a - b);
+  const uniqueRanks = [
+    ...new Set(cards.map((card) => RANK_VALUE[card.rank])),
+  ].sort((a, b) => a - b);
   for (let i = 0; i < uniqueRanks.length; i += 1) {
-    const window = uniqueRanks.filter((rank) => rank >= uniqueRanks[i] && rank <= uniqueRanks[i] + 4);
+    const window = uniqueRanks.filter(
+      (rank) => rank >= uniqueRanks[i] && rank <= uniqueRanks[i] + 4,
+    );
     if (window.length >= 4) score += 6;
   }
   return Math.min(100, Math.round(score));
 }
 
 export function positionLabel(playerIndex: number, dealerIndex: number) {
-  const offset = (playerIndex - dealerIndex + PLAYER_BLUEPRINTS.length) % PLAYER_BLUEPRINTS.length;
+  const offset =
+    (playerIndex - dealerIndex + PLAYER_BLUEPRINTS.length) %
+    PLAYER_BLUEPRINTS.length;
   return ['BTN', 'SB', 'BB', 'UTG', 'CO'][offset] ?? '';
 }
 
-export function chooseBotDecision(state: GameState, playerIndex: number): BotDecision {
+export function chooseBotDecision(
+  state: GameState,
+  playerIndex: number,
+): BotDecision {
   const player = state.players[playerIndex];
   const toCall = getToCall(state, playerIndex);
   const pot = getPotFromPlayers(state.players);
@@ -717,23 +917,34 @@ export function chooseBotDecision(state: GameState, playerIndex: number): BotDec
     hero: { enter: 50, aggression: 0.5, looseness: 0 },
   }[player.styleKey];
   const position = positionLabel(playerIndex, state.dealerIndex);
-  const positionBonus = position === 'BTN' ? 8 : position === 'CO' ? 5 : position === 'SB' ? -2 : 0;
-  const baseStrength = state.street === 'preflop'
-    ? preflopStrength(player.holeCards)
-    : postflopStrength(player, state.board);
-  const strength = Math.max(0, Math.min(100, baseStrength + profile.looseness + positionBonus));
+  const positionBonus =
+    position === 'BTN' ? 8 : position === 'CO' ? 5 : position === 'SB' ? -2 : 0;
+  const baseStrength =
+    state.street === 'preflop'
+      ? preflopStrength(player.holeCards)
+      : postflopStrength(player, state.board);
+  const strength = Math.max(
+    0,
+    Math.min(100, baseStrength + profile.looseness + positionBonus),
+  );
   const random = Math.random();
   const maxTo = player.streetBet + player.stack;
-  const minRaiseTo = state.currentBet === 0 ? BIG_BLIND : state.currentBet + state.minRaise;
+  const minRaiseTo =
+    state.currentBet === 0 ? BIG_BLIND : state.currentBet + state.minRaise;
   const canRaise = maxTo > state.currentBet && maxTo >= minRaiseTo;
   const strongThreshold = state.street === 'preflop' ? 72 : 70;
 
   if (toCall === 0) {
-    const shouldBet = strength >= strongThreshold - 8 && random < profile.aggression;
+    const shouldBet =
+      strength >= strongThreshold - 8 && random < profile.aggression;
     if (shouldBet && canRaise) {
-      const target = state.street === 'preflop'
-        ? Math.max(3 * BIG_BLIND, minRaiseTo)
-        : Math.max(minRaiseTo, Math.round((pot * (0.5 + profile.aggression * 0.25)) / 5) * 5);
+      const target =
+        state.street === 'preflop'
+          ? Math.max(3 * BIG_BLIND, minRaiseTo)
+          : Math.max(
+              minRaiseTo,
+              Math.round((pot * (0.5 + profile.aggression * 0.25)) / 5) * 5,
+            );
       return {
         type: 'raise',
         raiseTo: Math.min(maxTo, target),
@@ -745,21 +956,31 @@ export function chooseBotDecision(state: GameState, playerIndex: number): BotDec
 
   const potOdds = toCall / Math.max(1, pot + toCall);
   const equityProxy = strength / 100;
-  const entryFloor = state.street === 'preflop' ? profile.enter / 100 : potOdds + 0.08;
+  const entryFloor =
+    state.street === 'preflop' ? profile.enter / 100 : potOdds + 0.08;
   const pressure = toCall / Math.max(1, player.stack + toCall);
-  const continueScore = equityProxy + (Math.random() - 0.5) * 0.14 - pressure * 0.18;
+  const continueScore =
+    equityProxy + (Math.random() - 0.5) * 0.14 - pressure * 0.18;
 
-  if (continueScore < entryFloor && !(player.styleKey === 'station' && continueScore > entryFloor - 0.14)) {
+  if (
+    continueScore < entryFloor &&
+    !(player.styleKey === 'station' && continueScore > entryFloor - 0.14)
+  ) {
     return {
       type: 'fold',
       reason: `牌力估计 ${strength}/100，所需底池赔率 ${Math.round(potOdds * 100)}%；选择弃牌`,
     };
   }
 
-  if (strength >= strongThreshold && canRaise && Math.random() < profile.aggression) {
-    const raiseBy = state.street === 'preflop'
-      ? Math.max(state.minRaise, state.currentBet * 2)
-      : Math.max(state.minRaise, Math.round((pot * 0.65) / 5) * 5);
+  if (
+    strength >= strongThreshold &&
+    canRaise &&
+    Math.random() < profile.aggression
+  ) {
+    const raiseBy =
+      state.street === 'preflop'
+        ? Math.max(state.minRaise, state.currentBet * 2)
+        : Math.max(state.minRaise, Math.round((pot * 0.65) / 5) * 5);
     return {
       type: 'raise',
       raiseTo: Math.min(maxTo, state.currentBet + raiseBy),
@@ -775,8 +996,14 @@ export function chooseBotDecision(state: GameState, playerIndex: number): BotDec
 
 function generateAdvice(state: GameState): HandAdvice {
   const hero = state.players[0];
-  const heroActions = state.actions.filter((action) => action.playerId === hero.id && ['fold', 'check', 'call', 'bet', 'raise'].includes(action.type));
-  const preflopActions = heroActions.filter((action) => action.street === 'preflop');
+  const heroActions = state.actions.filter(
+    (action) =>
+      action.playerId === hero.id &&
+      ['fold', 'check', 'call', 'bet', 'raise'].includes(action.type),
+  );
+  const preflopActions = heroActions.filter(
+    (action) => action.street === 'preflop',
+  );
   const firstVoluntary = preflopActions[0];
   const strength = preflopStrength(hero.holeCards);
   const position = positionLabel(0, state.dealerIndex);
@@ -790,7 +1017,8 @@ function generateAdvice(state: GameState): HandAdvice {
       text: '这手牌在你行动前就已结束，没有可评价的主动决策。继续关注位置与桌上行动。',
     });
   } else if (firstVoluntary.type === 'fold') {
-    const questionable = strength >= 68 || (['BTN', 'CO'].includes(position) && strength >= 52);
+    const questionable =
+      strength >= 68 || (['BTN', 'CO'].includes(position) && strength >= 52);
     if (questionable) deductions += 1;
     items.push({
       title: '翻前选择',
@@ -811,7 +1039,9 @@ function generateAdvice(state: GameState): HandAdvice {
     });
   }
 
-  const aggressive = heroActions.filter((action) => action.type === 'bet' || action.type === 'raise');
+  const aggressive = heroActions.filter(
+    (action) => action.type === 'bet' || action.type === 'raise',
+  );
   const unusualSizing = aggressive.find((action) => {
     if (action.isAllIn || action.street === 'preflop') return false;
     const ratio = action.amount / Math.max(1, action.potBefore);
@@ -845,22 +1075,39 @@ function generateAdvice(state: GameState): HandAdvice {
     text: `本手结果为 ${heroProfit >= 0 ? '+' : ''}${heroProfit} 筹码。单手输赢不代表决策质量，优先复查当时可见信息与底池赔率。`,
   });
 
-  const grade: HandAdvice['grade'] = deductions === 0 ? 'A' : deductions === 1 ? 'B' : 'C';
+  const grade: HandAdvice['grade'] =
+    deductions === 0 ? 'A' : deductions === 1 ? 'B' : 'C';
   return {
     grade,
-    headline: grade === 'A' ? '线路整体清晰' : grade === 'B' ? '有一处值得复盘' : '建议放慢决策节奏',
+    headline:
+      grade === 'A'
+        ? '线路整体清晰'
+        : grade === 'B'
+          ? '有一处值得复盘'
+          : '建议放慢决策节奏',
     items,
   };
 }
 
-export function toHandRecord(state: GameState, sessionId: string): HandRecord {
+export function toHandRecord(
+  state: GameState,
+  sessionId: string,
+  trainingRoundId: string | null = null,
+  roundHandNumber: number | null = null,
+): HandRecord {
   const hero = state.players[0];
-  const heroPreflop = state.actions.filter((action) => action.playerId === hero.id && action.street === 'preflop');
-  const winnerNames = state.players.filter((player) => state.winnerIds.includes(player.id)).map((player) => player.name);
+  const heroPreflop = state.actions.filter(
+    (action) => action.playerId === hero.id && action.street === 'preflop',
+  );
+  const winnerNames = state.players
+    .filter((player) => state.winnerIds.includes(player.id))
+    .map((player) => player.name);
   return {
     id: state.handId,
     sessionId,
     handNumber: state.handNumber,
+    trainingRoundId,
+    roundHandNumber,
     playedAt: new Date().toISOString(),
     blinds: `${SMALL_BLIND}/${BIG_BLIND}`,
     dealerIndex: state.dealerIndex,
@@ -883,11 +1130,62 @@ export function toHandRecord(state: GameState, sessionId: string): HandRecord {
     showdown: state.showdown,
     advice: state.advice ?? generateAdvice(state),
     heroStats: {
-      vpip: heroPreflop.some((action) => ['call', 'bet', 'raise'].includes(action.type)),
+      vpip: heroPreflop.some((action) =>
+        ['call', 'bet', 'raise'].includes(action.type),
+      ),
       pfr: heroPreflop.some((action) => ['bet', 'raise'].includes(action.type)),
       wentToShowdown: state.showdown && !hero.folded,
       won: state.winnerIds.includes(hero.id),
     },
+  };
+}
+
+export function createTrainingRound(sessionId: string): TrainingRoundRecord {
+  return {
+    id: makeId('round'),
+    sessionId,
+    startedAt: new Date().toISOString(),
+    endedAt: null,
+    status: 'active',
+    handIds: [],
+    handsPlayed: 0,
+    heroProfit: 0,
+    vpipHands: 0,
+    pfrHands: 0,
+    showdownHands: 0,
+    wins: 0,
+    gradeCounts: { A: 0, B: 0, C: 0 },
+  };
+}
+
+export function appendHandToRound(
+  round: TrainingRoundRecord,
+  hand: HandRecord,
+): TrainingRoundRecord {
+  if (round.handIds.includes(hand.id)) return round;
+  const gradeCounts = { ...round.gradeCounts };
+  gradeCounts[hand.advice.grade] += 1;
+  return {
+    ...round,
+    handIds: [...round.handIds, hand.id],
+    handsPlayed: round.handsPlayed + 1,
+    heroProfit: round.heroProfit + hand.heroProfit,
+    vpipHands: round.vpipHands + (hand.heroStats.vpip ? 1 : 0),
+    pfrHands: round.pfrHands + (hand.heroStats.pfr ? 1 : 0),
+    showdownHands:
+      round.showdownHands + (hand.heroStats.wentToShowdown ? 1 : 0),
+    wins: round.wins + (hand.heroStats.won ? 1 : 0),
+    gradeCounts,
+  };
+}
+
+export function completeTrainingRound(
+  round: TrainingRoundRecord,
+): TrainingRoundRecord {
+  return {
+    ...round,
+    endedAt: new Date().toISOString(),
+    status: 'completed',
   };
 }
 

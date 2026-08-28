@@ -13,5 +13,30 @@ export const handHistories = sqliteTable(
     resultText: text('result_text').notNull(),
     recordJson: text('record_json').notNull(),
   },
-  (table) => [index('idx_hand_histories_session_played').on(table.sessionId, table.playedAt)],
+  (table) => [
+    index('idx_hand_histories_session_played').on(
+      table.sessionId,
+      table.playedAt,
+    ),
+  ],
+);
+
+export const trainingRounds = sqliteTable(
+  'training_rounds',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id').notNull(),
+    startedAt: text('started_at').notNull(),
+    endedAt: text('ended_at'),
+    status: text('status').notNull(),
+    handsPlayed: integer('hands_played').notNull(),
+    heroProfit: integer('hero_profit').notNull(),
+    recordJson: text('record_json').notNull(),
+  },
+  (table) => [
+    index('idx_training_rounds_session_started').on(
+      table.sessionId,
+      table.startedAt,
+    ),
+  ],
 );
