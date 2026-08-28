@@ -64,11 +64,11 @@ import {
 const SESSION_KEY = 'riverlab-training-session';
 
 const seatPositions = [
-  'left-1/2 bottom-[-2%] -translate-x-1/2',
-  'left-[2%] bottom-[14%]',
-  'left-[8%] top-[2%]',
-  'right-[8%] top-[2%]',
-  'right-[2%] bottom-[14%]',
+  'left-1/2 bottom-[-1%] -translate-x-1/2',
+  'left-[1%] bottom-[18%]',
+  'left-[7%] top-[12%]',
+  'right-[7%] top-[12%]',
+  'right-[1%] bottom-[18%]',
 ];
 
 const betPositions = [
@@ -83,21 +83,44 @@ function PokerCard({
   card,
   hidden = false,
   small = false,
+  tableHole = false,
 }: {
   card?: Card;
   hidden?: boolean;
   small?: boolean;
+  tableHole?: boolean;
 }) {
   const size = small
     ? 'h-12 w-9 rounded-md'
-    : 'h-[70px] w-[50px] rounded-lg sm:h-[78px] sm:w-14';
+    : tableHole
+      ? 'h-[68px] w-12 rounded-lg sm:h-[76px] sm:w-[54px]'
+      : 'h-[82px] w-[58px] rounded-xl sm:h-[108px] sm:w-[76px]';
+  const rankSize = small ? 'text-sm' : tableHole ? 'text-lg' : 'text-2xl';
+  const cornerSuitSize = small
+    ? 'text-[11px]'
+    : tableHole
+      ? 'text-sm'
+      : 'text-lg';
+  const centerSuitSize = small
+    ? 'text-xl'
+    : tableHole
+      ? 'text-2xl'
+      : 'text-4xl';
+  const logoSize = small
+    ? 'size-5 text-[9px]'
+    : tableHole
+      ? 'size-7 text-[11px]'
+      : 'size-9 text-sm';
+
   if (hidden || !card) {
     return (
       <div
         aria-label="暗牌"
-        className={`${size} card-back relative grid shrink-0 place-items-center border border-[#d7ff8f]/25 shadow-[0_8px_16px_rgba(0,0,0,.28)]`}
+        className={`${size} card-back relative grid shrink-0 place-items-center border border-[#d7ff8f]/25 shadow-[0_10px_24px_rgba(0,0,0,.32)]`}
       >
-        <span className="grid size-5 place-items-center rounded-md border border-[#c9ff63]/25 text-[9px] font-black text-[#c9ff63]/65">
+        <span
+          className={`grid ${logoSize} place-items-center rounded-lg border border-[#c9ff63]/25 font-black text-[#c9ff63]/65`}
+        >
           R
         </span>
       </div>
@@ -107,16 +130,18 @@ function PokerCard({
   return (
     <div
       aria-label={cardText(card)}
-      className={`${size} relative shrink-0 border border-black/10 bg-[#f5f4ef] text-[#151817] shadow-[0_8px_16px_rgba(0,0,0,.3)]`}
+      className={`${size} relative shrink-0 border border-black/10 bg-[#f7f6f1] text-[#151817] shadow-[0_12px_26px_rgba(0,0,0,.34)]`}
     >
       <div
-        className={`absolute left-1.5 top-1 text-sm font-black leading-none ${red ? 'text-[#d3423b]' : 'text-[#181d1b]'}`}
+        className={`absolute left-2 top-1.5 ${rankSize} font-black leading-none ${red ? 'text-[#d3423b]' : 'text-[#181d1b]'}`}
       >
         <div>{card.rank}</div>
-        <div className="mt-0.5 text-[11px]">{suitSymbol(card.suit)}</div>
+        <div className={`mt-0.5 ${cornerSuitSize}`}>
+          {suitSymbol(card.suit)}
+        </div>
       </div>
       <div
-        className={`absolute bottom-1 right-1.5 rotate-180 text-xl ${red ? 'text-[#d3423b]' : 'text-[#181d1b]'}`}
+        className={`absolute bottom-1.5 right-2 rotate-180 ${centerSuitSize} ${red ? 'text-[#d3423b]' : 'text-[#181d1b]'}`}
       >
         {suitSymbol(card.suit)}
       </div>
@@ -144,13 +169,13 @@ function PlayerSeat({
       className={`absolute z-20 ${seatPositions[index]} transition-all duration-300 ${player.folded ? 'opacity-45 saturate-50' : ''}`}
     >
       {!player.isHero && game.status !== 'ready' && (
-        <div className="absolute -top-7 left-1/2 flex -translate-x-1/2 gap-1">
-          <PokerCard card={player.holeCards[0]} hidden={!reveal} small />
-          <PokerCard card={player.holeCards[1]} hidden={!reveal} small />
+        <div className="absolute -top-[50px] left-1/2 flex -translate-x-1/2 gap-1.5 sm:-top-[56px] sm:gap-2">
+          <PokerCard card={player.holeCards[0]} hidden={!reveal} tableHole />
+          <PokerCard card={player.holeCards[1]} hidden={!reveal} tableHole />
         </div>
       )}
       <div
-        className={`relative flex min-w-[116px] items-center gap-2 rounded-2xl border p-2 shadow-2xl backdrop-blur transition-all sm:min-w-[128px] sm:gap-2.5 sm:p-2.5 ${
+        className={`relative flex min-w-[132px] items-center gap-2.5 rounded-2xl border p-2.5 shadow-2xl backdrop-blur transition-all sm:min-w-[148px] sm:gap-3 sm:p-3 ${
           active
             ? 'border-[#c9ff63]/65 bg-[#1a251b] shadow-[0_0_0_3px_rgba(201,255,99,.08),0_18px_45px_rgba(0,0,0,.45)]'
             : player.isHero
@@ -159,46 +184,46 @@ function PlayerSeat({
         }`}
       >
         <div
-          className={`grid size-8 shrink-0 place-items-center rounded-xl text-[11px] font-black sm:size-9 ${player.isHero ? 'bg-[#c9ff63] text-[#10180d]' : 'bg-emerald-400/10 text-emerald-200'}`}
+          className={`grid size-9 shrink-0 place-items-center rounded-xl text-xs font-black sm:size-11 sm:text-sm ${player.isHero ? 'bg-[#c9ff63] text-[#10180d]' : 'bg-emerald-400/10 text-emerald-200'}`}
         >
           {player.shortName}
         </div>
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-white sm:text-sm">
+          <div className="flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-white sm:text-[15px]">
             {player.name}
             {!player.isHero && (
-              <span className="hidden text-[9px] font-medium text-white/35 sm:inline">
+              <span className="hidden text-[10px] font-medium text-white/35 sm:inline">
                 {player.style}
               </span>
             )}
           </div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-[10px] tabular-nums text-amber-300 sm:text-xs">
-            <Coins className="size-3" />
+          <div className="mt-1 flex items-center gap-1.5 text-xs tabular-nums text-amber-300 sm:text-sm">
+            <Coins className="size-3.5" />
             {player.stack}
           </div>
         </div>
         {position && (
-          <span className="absolute -right-1.5 -top-1.5 rounded-md border border-white/10 bg-[#28312c] px-1.5 py-0.5 text-[8px] font-bold text-white/55">
+          <span className="absolute -right-2 -top-2 rounded-lg border border-white/10 bg-[#28312c] px-2 py-0.5 text-[9px] font-bold text-white/65">
             {position}
           </span>
         )}
         {game.dealerIndex === index && (
-          <span className="absolute -bottom-2 -right-2 grid size-5 place-items-center rounded-full border-2 border-[#101615] bg-white text-[9px] font-black text-[#18201d]">
+          <span className="absolute -bottom-2 -right-2 grid size-6 place-items-center rounded-full border-2 border-[#101615] bg-white text-[10px] font-black text-[#18201d]">
             D
           </span>
         )}
       </div>
       {player.lastAction && game.status !== 'ready' && (
         <div
-          className={`absolute left-1/2 top-full mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-full border px-2 py-0.5 text-[9px] font-semibold ${active ? 'border-[#c9ff63]/25 bg-[#c9ff63]/10 text-[#dfff9f]' : 'border-white/8 bg-black/35 text-white/55'}`}
+          className={`absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold ${active ? 'border-[#c9ff63]/25 bg-[#c9ff63]/10 text-[#dfff9f]' : 'border-white/8 bg-black/45 text-white/60'}`}
         >
           {player.lastAction}
         </div>
       )}
       {player.isHero && game.status !== 'ready' && (
-        <div className="absolute -top-[58px] left-1/2 flex -translate-x-1/2 gap-1.5 sm:-top-[66px]">
-          <PokerCard card={player.holeCards[0]} small />
-          <PokerCard card={player.holeCards[1]} small />
+        <div className="absolute -top-[70px] left-1/2 flex -translate-x-1/2 gap-1.5 sm:-top-[78px] sm:gap-2">
+          <PokerCard card={player.holeCards[0]} tableHole />
+          <PokerCard card={player.holeCards[1]} tableHole />
         </div>
       )}
     </div>
@@ -209,43 +234,58 @@ function TableCenter({ game }: { game: GameState }) {
   const currentPlayer =
     game.actingIndex >= 0 ? game.players[game.actingIndex] : null;
   return (
-    <div className="absolute left-1/2 top-1/2 z-10 flex w-[min(74%,620px)] -translate-x-1/2 -translate-y-1/2 flex-col items-center">
+    <div className="absolute left-1/2 top-[45%] z-10 flex w-[min(94%,760px)] -translate-x-1/2 -translate-y-1/2 flex-col items-center">
       {game.status === 'ready' ? (
-        <div className="max-w-64 text-center">
-          <span className="rounded-full border border-emerald-200/10 bg-black/10 px-3 py-1 text-[9px] uppercase tracking-[0.2em] text-emerald-100/35">
+        <div className="max-w-sm text-center">
+          <span className="rounded-full border border-emerald-200/10 bg-black/15 px-4 py-1.5 text-[10px] uppercase tracking-[0.2em] text-emerald-100/45">
             No Limit Hold&apos;em
           </span>
-          <p className="mt-3 text-sm font-medium text-emerald-50/65">
+          <p className="mt-4 text-lg font-semibold text-emerald-50/75">
             你的私人训练桌已就绪
           </p>
-          <p className="mt-1 text-[11px] leading-5 text-emerald-50/35">
+          <p className="mt-2 text-xs leading-6 text-emerald-50/40">
             四名 Bot 会依照各自风格行动，全部决策会自动记入手牌历史。
           </p>
         </div>
       ) : (
         <>
-          <div className="mb-3 flex min-h-[78px] items-center justify-center gap-1.5 sm:gap-2">
-            {Array.from({ length: 5 }, (_, index) => (
-              <PokerCard
-                key={index}
-                card={game.board[index]}
-                hidden={!game.board[index]}
-              />
-            ))}
-          </div>
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1.5 shadow-lg backdrop-blur">
-            <Coins className="size-3.5 text-amber-300" />
-            <span className="text-[10px] uppercase tracking-[0.15em] text-white/35">
-              底池
-            </span>
-            <span className="text-sm font-semibold tabular-nums text-amber-200">
-              {getPot(game)}
-            </span>
+          <div className="w-fit max-w-full rounded-[30px] border border-white/[.075] bg-black/[.12] px-2.5 py-3 shadow-[0_24px_70px_rgba(0,0,0,.18)] backdrop-blur-[2px] sm:px-5 sm:py-4">
+            <div className="mb-2 flex items-center justify-between px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-50/35">
+              <span>公共牌</span>
+              <span>{streetName(game.street)}</span>
+            </div>
+            <div className="flex min-h-[82px] items-center justify-center gap-1 sm:min-h-[108px] sm:gap-2.5">
+              {Array.from({ length: 5 }, (_, index) => (
+                <PokerCard
+                  key={index}
+                  card={game.board[index]}
+                  hidden={!game.board[index]}
+                />
+              ))}
+            </div>
+            <div className="mt-3 flex justify-center">
+              <div className="flex items-center gap-3 rounded-2xl border border-amber-200/15 bg-[#0a1812]/75 px-4 py-2 shadow-lg">
+                <div className="grid size-9 place-items-center rounded-xl bg-amber-300/10 text-amber-300">
+                  <Coins className="size-4.5" />
+                </div>
+                <div>
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/35">
+                    当前底池
+                  </p>
+                  <p className="text-2xl font-semibold leading-none tabular-nums text-amber-200 sm:text-3xl">
+                    {getPot(game)}
+                    <span className="ml-1.5 text-[10px] font-medium text-amber-100/35">
+                      筹码
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
           {game.status === 'playing' && currentPlayer && (
-            <p className="mt-2 flex items-center gap-1.5 text-[10px] text-emerald-50/45">
+            <p className="mt-2.5 flex items-center gap-2 rounded-full bg-black/20 px-3 py-1.5 text-[11px] font-medium text-emerald-50/55 sm:text-xs">
               {!currentPlayer.isHero && (
-                <LoaderCircle className="size-3 animate-spin text-[#c9ff63]" />
+                <LoaderCircle className="size-3.5 animate-spin text-[#c9ff63]" />
               )}
               {currentPlayer.isHero
                 ? '轮到你行动'
@@ -253,7 +293,7 @@ function TableCenter({ game }: { game: GameState }) {
             </p>
           )}
           {game.status === 'complete' && (
-            <div className="mt-3 max-w-md rounded-xl border border-[#c9ff63]/20 bg-[#0c1711]/90 px-4 py-2 text-center text-xs font-medium text-[#dcffa2] shadow-xl">
+            <div className="mt-2.5 max-w-[580px] rounded-2xl border border-[#c9ff63]/20 bg-[#0c1711]/92 px-5 py-2.5 text-center text-xs font-semibold leading-5 text-[#dcffa2] shadow-xl sm:text-sm">
               {game.resultText}
             </div>
           )}
@@ -272,9 +312,9 @@ function BetMarkers({ game }: { game: GameState }) {
           player.streetBet > 0 && (
             <div
               key={player.id}
-              className={`absolute z-10 ${betPositions[index]} flex items-center gap-1 rounded-full border border-amber-200/15 bg-black/25 px-2 py-1 text-[9px] font-bold tabular-nums text-amber-200/80`}
+              className={`absolute z-[15] ${betPositions[index]} flex items-center gap-1.5 rounded-full border border-amber-200/20 bg-black/45 px-3 py-1.5 text-[11px] font-bold tabular-nums text-amber-200/90 shadow-lg`}
             >
-              <span className="size-2 rounded-full border border-amber-200/40 bg-amber-400/70" />
+              <span className="size-2.5 rounded-full border border-amber-200/40 bg-amber-400/80" />
               {player.streetBet}
             </div>
           ),
@@ -1478,7 +1518,7 @@ export default function PokerTrainer() {
             </div>
           )}
 
-          <div className="relative mx-auto min-h-[500px] w-full max-w-5xl flex-1 sm:min-h-[560px]">
+          <div className="relative mx-auto h-[500px] w-full max-w-5xl flex-none sm:h-[540px]">
             <div className="poker-table absolute inset-x-[2%] bottom-[9%] top-[8%] rounded-[46%] border-[8px] border-[#202a24] shadow-[inset_0_0_0_1px_rgba(255,255,255,.08),0_35px_90px_rgba(0,0,0,.45)] sm:inset-x-[5%] sm:border-[10px]">
               <div className="absolute inset-4 rounded-[46%] border border-white/[.065] sm:inset-5" />
             </div>
