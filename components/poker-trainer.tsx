@@ -45,6 +45,7 @@ import {
   getPot,
   getToCall,
   generateRoundCoachReport,
+  formatHandRecordResult,
   isRedSuit,
   positionLabel,
   preflopStrength,
@@ -409,7 +410,7 @@ function TableCenter({ game }: { game: GameState }) {
             </p>
           )}
           {game.status === 'complete' && (
-            <div className="mt-2.5 max-w-[580px] rounded-2xl border border-[#c9ff63]/20 bg-[#0c1711]/92 px-5 py-2.5 text-center text-xs font-semibold leading-5 text-[#dcffa2] shadow-xl sm:text-sm">
+            <div className="mt-3 max-w-[680px] rounded-2xl border border-[#c9ff63]/25 bg-[#0c1711]/95 px-6 py-3 text-center text-sm font-semibold leading-6 text-[#e5ffb7] shadow-xl sm:text-base">
               {game.resultText}
             </div>
           )}
@@ -988,7 +989,7 @@ function HistoryReview({ record }: { record: HandRecord }) {
                 })}
               </p>
               <p className="mt-2 text-base font-semibold text-white/90">
-                {record.resultText}
+                {formatHandRecordResult(record)}
               </p>
             </div>
             <Badge

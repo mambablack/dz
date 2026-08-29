@@ -7,6 +7,7 @@ import {
   chooseBotDecision,
   completeTrainingRound,
   generateRoundCoachReport,
+  formatHandRecordResult,
   createReadyGame,
   createTrainingRound,
   getToCall,
@@ -98,12 +99,37 @@ for (let hand = 0; hand < 120; hand += 1) {
   assert.equal(record.heroCards.length, 2);
   assert.ok(record.actions.length >= 3);
   assert.ok(record.advice.items.length >= 2);
+  assert.ok(
+    game.winnerIds.every((winnerId) =>
+      game.resultText.includes(
+        game.players.find((player) => player.id === winnerId)?.name ?? '',
+      ),
+    ),
+    '结算文案必须包含所有赢家',
+  );
+  if (game.showdown) {
+    assert.match(game.resultText, /牌型：/, '摊牌结算必须说明获胜牌型');
+    assert.match(game.resultText, /（.+）/, '摊牌结算必须显示赢家手牌');
+  } else {
+    assert.match(
+      game.resultText,
+      /方式：其他玩家全部弃牌/,
+      '无人跟注获胜必须说明结算方式',
+    );
+  }
+  assert.match(game.resultText, /赢得：|底池：/, '结算必须说明筹码归属');
 }
 const trainingRound = createTrainingRound('test-session');
 const roundRecord = toHandRecord(game, 'test-session', trainingRound.id, 1);
 const updatedRound = appendHandToRound(trainingRound, roundRecord);
 assert.equal(roundRecord.trainingRoundId, trainingRound.id);
 assert.equal(roundRecord.roundHandNumber, 1);
+assert.equal(formatHandRecordResult(roundRecord), roundRecord.resultText);
+assert.match(
+  formatHandRecordResult({ ...roundRecord, resultText: '旧版结算文案' }),
+  /牌型：|方式：/,
+  '历史手牌也应生成清晰的结算摘要',
+);
 assert.equal(updatedRound.handsPlayed, 1);
 assert.deepEqual(updatedRound.handIds, [roundRecord.id]);
 assert.equal(updatedRound.heroProfit, roundRecord.heroProfit);

@@ -89,7 +89,13 @@ export interface RoundCoachReport {
 export interface SidePotResult {
   amount: number;
   winners: string[];
+  winnerCards: string[];
   handName: string;
+  handDescription: string;
+  payouts: Array<{
+    name: string;
+    amount: number;
+  }>;
 }
 
 export interface GameState {
@@ -654,7 +660,7 @@ function awardUncontested(state: GameState, winner: Player): GameState {
   state.status = 'complete';
   state.actingIndex = -1;
   state.winnerIds = [winner.id];
-  state.resultText = `${winner.name} 在其他玩家弃牌后赢得 ${pot} 筹码`;
+  state.resultText = `${winner.name}获胜｜方式：其他玩家全部弃牌｜赢得：${pot} 筹码`;
   state.actions.push({
     id: makeId('a'),
     playerId: winner.id,
@@ -681,6 +687,42 @@ function compareValues(a: number[], b: number[]) {
     if (diff !== 0) return diff;
   }
   return 0;
+}
+
+function rankLabel(value: number) {
+  return (
+    {
+      14: 'A',
+      13: 'K',
+      12: 'Q',
+      11: 'J',
+      10: 'T',
+    }[value] ?? String(value)
+  );
+}
+
+function describeEvaluatedHand(hand: EvaluatedHand) {
+  const [, primary = 0, secondary = 0, ...rest] = hand.values;
+  if (hand.name === '同花顺') return `同花顺（${rankLabel(primary)} 高）`;
+  if (hand.name === '四条')
+    return `四条（四张 ${rankLabel(primary)}，${rankLabel(secondary)} 踢脚）`;
+  if (hand.name === '葫芦')
+    return `葫芦（三张 ${rankLabel(primary)} 带一对 ${rankLabel(secondary)}）`;
+  if (hand.name === '同花') return `同花（${rankLabel(primary)} 高）`;
+  if (hand.name === '顺子') return `顺子（${rankLabel(primary)} 高）`;
+  if (hand.name === '三条')
+    return `三条（三张 ${rankLabel(primary)}，${[secondary, ...rest]
+      .map(rankLabel)
+      .join('、')} 踢脚）`;
+  if (hand.name === '两对')
+    return `两对（${rankLabel(primary)} 和 ${rankLabel(secondary)}，${rankLabel(rest[0] ?? 0)} 踢脚）`;
+  if (hand.name === '一对')
+    return `一对（${rankLabel(primary)}，${[secondary, ...rest]
+      .map(rankLabel)
+      .join('、')} 踢脚）`;
+  if (hand.name === '高牌')
+    return `高牌（${[primary, secondary, ...rest].map(rankLabel).join('、')}）`;
+  return hand.name;
 }
 
 function evaluateFive(cards: Card[]): EvaluatedHand {
@@ -766,6 +808,66 @@ export function bestHand(cards: Card[]): EvaluatedHand {
   return best ?? { values: [0], name: '高牌' };
 }
 
+function formatShowdownResult(pots: SidePotResult[]) {
+  if (pots.length === 0) return '摊牌完成｜未形成可分配底池';
+
+  const summarized = pots.reduce<SidePotResult[]>((groups, current) => {
+    const previous = groups[groups.length - 1];
+    const sameWinners =
+      previous &&
+      previous.handDescription === current.handDescription &&
+      previous.winners.length === current.winners.length &&
+      previous.winners.every(
+        (winner, index) => winner === current.winners[index],
+      );
+
+    if (!sameWinners) {
+      groups.push({
+        ...current,
+        winners: [...current.winners],
+        winnerCards: [...current.winnerCards],
+        payouts: current.payouts.map((payout) => ({ ...payout })),
+      });
+      return groups;
+    }
+
+    previous.amount += current.amount;
+    current.payouts.forEach((payout) => {
+      const existing = previous.payouts.find(
+        (candidate) => candidate.name === payout.name,
+      );
+      if (existing) existing.amount += payout.amount;
+      else previous.payouts.push({ ...payout });
+    });
+    return groups;
+  }, []);
+
+  return summarized
+    .map((result, index) => {
+      const potLabel =
+        summarized.length === 1
+          ? ''
+          : index === 0
+            ? '主池：'
+            : `边池 ${index}：`;
+      const winnerText = result.winners
+        .map(
+          (winner, winnerIndex) =>
+            `${winner}（${result.winnerCards[winnerIndex] ?? '手牌未记录'}）`,
+        )
+        .join('、');
+
+      if (result.winners.length === 1) {
+        return `${potLabel}${winnerText}获胜｜牌型：${result.handDescription}｜赢得：${result.payouts[0]?.amount ?? result.amount} 筹码`;
+      }
+
+      const allocation = result.payouts
+        .map((payout) => `${payout.name} ${payout.amount}`)
+        .join('、');
+      return `${potLabel}${winnerText}平分底池｜牌型：${result.handDescription}｜底池：${result.amount} 筹码（分配：${allocation}）`;
+    })
+    .join('；');
+}
 function resolveShowdown(state: GameState): GameState {
   const pot = getPotFromPlayers(state.players);
   const levels = [
@@ -815,15 +917,26 @@ function resolveShowdown(state: GameState): GameState {
     });
     const share = Math.floor(amount / winners.length);
     let remainder = amount % winners.length;
-    winners.forEach((winner) => {
-      winner.stack += share + (remainder > 0 ? 1 : 0);
+    const payouts = winners.map((winner) => {
+      const won = share + (remainder > 0 ? 1 : 0);
+      winner.stack += won;
       if (remainder > 0) remainder -= 1;
       winnerIds.add(winner.id);
+      return { name: winner.name, amount: won };
     });
+    const winningHand = evaluations.get(winners[0].id) ?? {
+      values: [0],
+      name: '高牌',
+    };
     sidePots.push({
       amount,
       winners: winners.map((winner) => winner.name),
-      handName: evaluations.get(winners[0].id)?.name ?? '高牌',
+      winnerCards: winners.map((winner) =>
+        winner.holeCards.map(cardText).join(' '),
+      ),
+      handName: winningHand.name,
+      handDescription: describeEvaluatedHand(winningHand),
+      payouts,
     });
   });
 
@@ -843,10 +956,7 @@ function resolveShowdown(state: GameState): GameState {
   state.winnerIds = [...winnerIds];
   state.showdown = true;
   state.sidePots = sidePots;
-  const main = sidePots[0];
-  state.resultText = main
-    ? `${main.winners.join('、')} 以${main.handName}赢得${sidePots.length > 1 ? '主池' : ''} ${main.amount} 筹码`
-    : '摊牌完成';
+  state.resultText = formatShowdownResult(sidePots);
   state.actions.push({
     id: makeId('a'),
     playerId: 'dealer',
@@ -1146,6 +1256,39 @@ export function toHandRecord(
       won: state.winnerIds.includes(hero.id),
     },
   };
+}
+
+export function formatHandRecordResult(record: HandRecord) {
+  if (
+    record.resultText.includes('牌型：') ||
+    record.resultText.includes('方式：')
+  ) {
+    return record.resultText;
+  }
+
+  if (!record.showdown) {
+    const winner = record.winnerNames.join('、') || '最后未弃牌的玩家';
+    return `${winner}获胜｜方式：其他玩家全部弃牌｜赢得：${record.pot} 筹码`;
+  }
+
+  const winners = record.players.filter((player) =>
+    record.winnerNames.includes(player.name),
+  );
+  if (winners.length === 0) return record.resultText;
+
+  if (winners.length === 1) {
+    const winner = winners[0];
+    const hand = bestHand([...winner.cards, ...record.board]);
+    return `${winner.name}（${winner.cards.map(cardText).join(' ')}）获胜｜牌型：${describeEvaluatedHand(hand)}｜最终底池：${record.pot} 筹码`;
+  }
+
+  const winnerDetails = winners
+    .map((winner) => {
+      const hand = bestHand([...winner.cards, ...record.board]);
+      return `${winner.name}（${winner.cards.map(cardText).join(' ')}）— ${describeEvaluatedHand(hand)}`;
+    })
+    .join('；');
+  return `赢家：${winnerDetails}｜最终底池：${record.pot} 筹码`;
 }
 
 export function createTrainingRound(sessionId: string): TrainingRoundRecord {
