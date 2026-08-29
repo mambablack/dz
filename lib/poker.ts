@@ -1194,15 +1194,57 @@ export function generateRoundCoachReport(
   const count = round.handsPlayed;
   const gradeCounts = round.gradeCounts ?? { A: 0, B: 0, C: 0 };
   const gradedHands = gradeCounts.A + gradeCounts.B + gradeCounts.C;
-  const gradeScore = gradedHands
+  const baseGradeScore = gradedHands
     ? (gradeCounts.A * 2 + gradeCounts.B) / (gradedHands * 2)
     : 0.5;
-  const grade: HandAdvice['grade'] =
-    gradeScore >= 0.72 ? 'A' : gradeScore >= 0.4 ? 'B' : 'C';
   const vpip = count ? Math.round((round.vpipHands / count) * 100) : 0;
   const pfr = count ? Math.round((round.pfrHands / count) * 100) : 0;
   const passiveGap = vpip - pfr;
   const profitBb = round.heroProfit / BIG_BLIND;
+  const showdownRate = count
+    ? Math.round((round.showdownHands / count) * 100)
+    : 0;
+
+  const handNumber = (hand: HandRecord) =>
+    hand.roundHandNumber ?? hand.handNumber;
+  const signedBb = (chips: number) =>
+    `${chips >= 0 ? '+' : ''}${(chips / BIG_BLIND).toFixed(1)} BB`;
+  const preflopCallHands = hands.filter((hand) =>
+    hand.actions.some(
+      (action) =>
+        action.playerId === 'hero' &&
+        action.street === 'preflop' &&
+        action.type === 'call',
+    ),
+  ).length;
+  const costlyLosses = hands
+    .filter((hand) => hand.heroProfit <= -BIG_BLIND * 20)
+    .sort((left, right) => handNumber(left) - handNumber(right));
+  const topWins = [...hands]
+    .filter((hand) => hand.heroProfit > 0)
+    .sort((left, right) => right.heroProfit - left.heroProfit)
+    .slice(0, 3);
+  const topWinTotal = topWins.reduce(
+    (total, hand) => total + hand.heroProfit,
+    0,
+  );
+  const remainingProfit = round.heroProfit - topWinTotal;
+  const concentratedProfit =
+    count >= 8 &&
+    round.heroProfit > 0 &&
+    topWins.length === 3 &&
+    remainingProfit < 0;
+
+  let adjustedGradeScore = baseGradeScore;
+  if (count >= 6) {
+    if (vpip >= 55) adjustedGradeScore -= 0.2;
+    else if (vpip >= 45) adjustedGradeScore -= 0.1;
+
+    if (passiveGap >= 15) adjustedGradeScore -= 0.12;
+    else if (passiveGap >= 10) adjustedGradeScore -= 0.06;
+  }
+  const grade: HandAdvice['grade'] =
+    adjustedGradeScore >= 0.72 ? 'A' : adjustedGradeScore >= 0.4 ? 'B' : 'C';
 
   const issueCounts = new Map<string, number>();
   hands.forEach((hand) => {
@@ -1216,14 +1258,22 @@ export function generateRoundCoachReport(
     (left, right) => right[1] - left[1],
   )[0];
 
+  const costlyLossText = costlyLosses
+    .map((hand) => `第 ${handNumber(hand)} 手 ${signedBb(hand.heroProfit)}`)
+    .join('、');
+  const topWinHands = [...topWins]
+    .sort((left, right) => handNumber(left) - handNumber(right))
+    .map((hand) => `第 ${handNumber(hand)} 手`)
+    .join('、');
+
   const items: AdviceItem[] = [
     {
-      title: '决策质量分布',
+      title: `轮次总评：${grade}`,
       verdict: grade === 'A' ? 'good' : grade === 'C' ? 'review' : 'note',
       text:
         count === 0
           ? '本轮还没有完成手牌，结束若干手后才会形成整体评价。'
-          : `本轮单手评分为 A ${gradeCounts.A}、B ${gradeCounts.B}、C ${gradeCounts.C}。综合评价关注决策过程，不按短期输赢打分。`,
+          : `逐手启发式评分为 A ${gradeCounts.A}、B ${gradeCounts.B}、C ${gradeCounts.C}。轮次总评还会纳入 VPIP/PFR 结构与整轮风险分布，避免仅因短期盈利或单手结果给出过高评价。`,
     },
     {
       title: '翻前入池结构',
@@ -1232,17 +1282,30 @@ export function generateRoundCoachReport(
       text:
         count < 6
           ? `当前 VPIP ${vpip}%、PFR ${pfr}%，样本不足 6 手，只记录倾向，不据此给打法定性。`
-          : passiveGap >= 15
-            ? `VPIP ${vpip}%、PFR ${pfr}%，两者相差 ${passiveGap} 个百分点。下一轮优先检查冷跟是否过多，并明确哪些牌应改为加注或弃牌。`
-            : vpip >= 45
-              ? `VPIP ${vpip}% 偏宽。复盘边缘起手牌，尤其是在前位和面对加注时，避免仅因“想看翻牌”而入池。`
-              : `VPIP ${vpip}%、PFR ${pfr}%，本轮未出现明显的被动入池信号；继续结合位置和对手类型选择范围。`,
+          : passiveGap >= 15 || vpip >= 45
+            ? `VPIP ${vpip}%、PFR ${pfr}%，相差 ${passiveGap} 个百分点；${preflopCallHands} 手出现翻前跟注动作。这不表示每次跟注都错，但说明入池过宽和被动线路是下一轮的首要训练主题。`
+            : `VPIP ${vpip}%、PFR ${pfr}%，本轮没有明显的被动入池信号；继续按位置和对手类型管理范围。`,
+    },
+    {
+      title: '大底池风险控制',
+      verdict: costlyLosses.length > 0 ? 'review' : 'good',
+      text:
+        costlyLosses.length > 0
+          ? `本轮有 ${costlyLosses.length} 手亏损达到 20BB 以上：${costlyLossText}。重点检查多人底池中的边缘牌、面对强线时的 bluff-catcher，以及是否在更差牌难以跟注时主动做大底池。`
+          : '本轮没有出现单手亏损达到 20BB 的记录。继续在大额投入前确认价值目标和对手范围。',
+    },
+    {
+      title: '盈利结构与结果偏差',
+      verdict: concentratedProfit ? 'review' : 'note',
+      text: concentratedProfit
+        ? `本轮净赢 ${signedBb(round.heroProfit)}，但${topWinHands}这三手合计赢得 ${signedBb(topWinTotal)}，其余 ${Math.max(0, count - topWins.length)} 手合计 ${signedBb(remainingProfit)}。盈利高度集中，说明强牌价值兑现得好，但不能用最终盈亏掩盖其余手牌的过程漏洞。`
+        : `本轮盈亏为 ${signedBb(round.heroProfit)}。这个数字只记录波动；是否执行了清晰、可复述的决策流程，才是训练报告的核心。`,
     },
     recurringIssue && recurringIssue[1] >= 2
       ? {
           title: `重复问题：${recurringIssue[0]}`,
           verdict: 'review',
-          text: `这一问题在 ${recurringIssue[1]} 手牌后建议中重复出现。它应成为下一轮的首要训练主题，而不是分散修正多个小问题。`,
+          text: `这一问题在 ${recurringIssue[1]} 手牌后建议中重复出现。下一轮应把它设为唯一主课题，而不是同时分散修正多个小问题。`,
         }
       : {
           title: '重复性漏洞',
@@ -1250,53 +1313,55 @@ export function generateRoundCoachReport(
           text:
             count < 3
               ? '手牌数量较少，暂时无法判断是否存在重复性漏洞。'
-              : '本轮单手建议中尚未出现两次以上的同类警报，继续观察是否形成稳定模式。',
+              : '本轮逐手建议中尚未出现两次以上的同类警报，继续跨轮次观察。',
         },
-    {
-      title: '结果隔离',
-      verdict: 'note',
-      text: `本轮盈亏为 ${profitBb >= 0 ? '+' : ''}${profitBb.toFixed(1)} BB。这个数字用于记录波动；是否执行了清晰、可复述的决策流程，才是训练报告的核心。`,
-    },
   ];
 
   const nextSteps: string[] = [];
-  if (recurringIssue && recurringIssue[1] >= 2) {
-    nextSteps.push(
-      `把“${recurringIssue[0]}”设为下一轮唯一主课题，每次相关决策前停顿并口述理由。`,
-    );
-  }
-  if (passiveGap >= 15 && count >= 6) {
-    nextSteps.push('翻前面对入池机会时先做“加注或弃牌”判断，再考虑跟注。');
-  } else if (vpip >= 45 && count >= 6) {
-    nextSteps.push(
-      '收紧前位和面对加注时的边缘牌，记录每次入池所依赖的位置优势。',
-    );
-  } else {
-    nextSteps.push(
-      '每次翻前入池时记录位置、牌力与计划，继续观察 VPIP 与 PFR 的结构。',
-    );
-  }
-  nextSteps.push('大额下注前先写出：更差牌会不会跟、更好牌会不会弃。');
   if (count < 6) {
     nextSteps.push('下一轮至少完成 6–8 手，再判断频率类指标是否形成趋势。');
+  } else if (vpip >= 45 || passiveGap >= 15) {
+    nextSteps.push(
+      '把下一轮设为“翻前入池纪律”专项：以 VPIP 低于 45%、VPIP-PFR 差距小于 12 个百分点作为训练目标，首次自愿入池优先加注或弃牌。',
+    );
+  } else {
+    nextSteps.push('继续按位置记录翻前入池理由，保持主动性并跨轮验证频率。');
+  }
+
+  if (count >= 6 && (vpip >= 45 || preflopCallHands >= 3)) {
+    nextSteps.push(
+      '面对 limper 时，以约 4BB 加每位 limper 1BB 作为隔离加注训练基线，再按位置、筹码和对手调整。',
+    );
   } else {
     nextSteps.push(
-      '下一轮结束后对照本报告，先检查重复问题是否减少，再看盈亏。',
+      '每次翻前加注前明确目标：拿下死钱、隔离弱手，或为强范围建立底池。',
     );
+  }
+
+  if (costlyLosses.length > 0) {
+    nextSteps.push(
+      '多人底池计划投入超过 20BB 前先问：更差牌会跟吗？更好牌会弃吗？若两者都是否，优先控制底池。',
+    );
+  } else {
+    nextSteps.push('大额下注前先写出：更差牌会不会跟、更好牌会不会弃。');
   }
 
   const headline =
     count === 0
       ? '等待本轮形成训练样本'
-      : grade === 'C'
-        ? '先修正决策流程中的高频漏洞'
-        : recurringIssue && recurringIssue[1] >= 2
-          ? `集中训练：${recurringIssue[0]}`
-          : passiveGap >= 15 && count >= 6
+      : vpip >= 55 && profitBb >= 0
+        ? '盈利不错，但翻前范围与大底池边界需要收紧'
+        : vpip >= 55
+          ? '先收紧翻前范围，再谈扩大盈利'
+          : passiveGap >= 15
             ? '减少被动入池，建立翻前主动性'
-            : grade === 'A'
-              ? '本轮决策节奏整体稳定'
-              : '本轮基础线路基本稳定';
+            : grade === 'C'
+              ? '先修正决策流程中的高频漏洞'
+              : concentratedProfit
+                ? '强牌兑现出色，过程稳定性仍需提升'
+                : grade === 'A'
+                  ? '本轮决策节奏整体稳定'
+                  : '本轮基础线路基本稳定';
 
   return {
     grade,
@@ -1304,12 +1369,11 @@ export function generateRoundCoachReport(
     summary:
       count === 0
         ? '完成手牌后，教练会先汇总整轮趋势，再提供逐手复盘。'
-        : `本轮完成 ${count} 手，VPIP ${vpip}%、PFR ${pfr}%，盈亏 ${profitBb >= 0 ? '+' : ''}${profitBb.toFixed(1)} BB。${count < 6 ? ' 当前样本较小，报告只用于发现决策过程，不判断长期打法。' : ' 频率指标已可用于发现初步趋势，但仍需跨多轮验证。'}`,
+        : `本轮完成 ${count} 手，VPIP ${vpip}%、PFR ${pfr}%，摊牌 ${round.showdownHands} 手（${showdownRate}%）、赢下 ${round.wins} 手，盈亏 ${signedBb(round.heroProfit)}。频率指标已经能暴露初步趋势，但仍需跨多个轮次验证。`,
     items,
     nextSteps: nextSteps.slice(0, 3),
   };
 }
-
 export function completeTrainingRound(
   round: TrainingRoundRecord,
   hands: HandRecord[] = [],

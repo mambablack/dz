@@ -113,11 +113,23 @@ assert.equal(completedRound.status, 'completed');
 assert.ok(completedRound.endedAt);
 assert.equal(completedRound.handsPlayed, 1);
 assert.ok(completedRound.coachReport);
-assert.equal(completedRound.coachReport?.items.length, 4);
+assert.equal(completedRound.coachReport?.items.length, 5);
 assert.equal(completedRound.coachReport?.nextSteps.length, 3);
 const regeneratedReport = generateRoundCoachReport(completedRound, [
   roundRecord,
 ]);
 assert.match(regeneratedReport.summary, /1 手/);
+const looseRoundReport = generateRoundCoachReport(
+  {
+    ...completedRound,
+    handsPlayed: 10,
+    vpipHands: 7,
+    pfrHands: 4,
+    gradeCounts: { A: 10, B: 0, C: 0 },
+  },
+  [],
+);
+assert.equal(looseRoundReport.grade, 'B');
+assert.match(looseRoundReport.headline, /翻前范围/);
 
 console.log('Poker engine checks passed: evaluator + 120 complete hands');

@@ -211,23 +211,19 @@ function PokerCard({
   tableHole?: boolean;
 }) {
   const size = small
-    ? 'h-12 w-9 rounded-md'
+    ? 'h-14 w-10 rounded-lg'
     : tableHole
       ? 'h-[68px] w-12 rounded-lg sm:h-[76px] sm:w-[54px]'
       : 'h-[82px] w-[58px] rounded-xl sm:h-[108px] sm:w-[76px]';
-  const rankSize = small ? 'text-sm' : tableHole ? 'text-lg' : 'text-2xl';
-  const cornerSuitSize = small
-    ? 'text-[11px]'
-    : tableHole
-      ? 'text-sm'
-      : 'text-lg';
+  const rankSize = small ? 'text-base' : tableHole ? 'text-lg' : 'text-2xl';
+  const cornerSuitSize = small ? 'text-xs' : tableHole ? 'text-sm' : 'text-lg';
   const centerSuitSize = small
-    ? 'text-xl'
+    ? 'text-2xl'
     : tableHole
       ? 'text-2xl'
       : 'text-4xl';
   const logoSize = small
-    ? 'size-5 text-[9px]'
+    ? 'size-6 text-[10px]'
     : tableHole
       ? 'size-7 text-[11px]'
       : 'size-9 text-sm';
@@ -619,6 +615,22 @@ function ActionControls({
         {canRaise && (
           <div className="min-w-0 flex-1 rounded-2xl border border-white/8 bg-black/15 px-4 py-3">
             <div className="mb-3 flex flex-wrap items-center gap-2">
+              {[30, 50, 60].map((amount) => {
+                const unavailable = amount < minRaiseTo || amount > maxRaiseTo;
+                return (
+                  <button
+                    type="button"
+                    key={amount}
+                    disabled={unavailable}
+                    aria-label={'加注至 ' + amount + ' 筹码'}
+                    onClick={() => setRaiseTo(clampSizing(amount))}
+                    className="h-10 min-w-[64px] rounded-xl border border-[#c9ff63]/18 bg-[#c9ff63]/[.07] px-3 text-sm font-bold tabular-nums text-[#ddffa0] transition hover:border-[#c9ff63]/35 hover:bg-[#c9ff63]/15 disabled:cursor-not-allowed disabled:border-white/6 disabled:bg-white/[.02] disabled:text-white/20"
+                  >
+                    {amount}
+                  </button>
+                );
+              })}
+              <span className="hidden h-6 w-px bg-white/10 sm:block" />
               {[0.5, 0.75, 1].map((factor) => (
                 <button
                   type="button"
@@ -679,9 +691,9 @@ function Timeline({
   if (actions.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-white/10 px-5 py-9 text-center">
-        <History className="mx-auto size-4 text-white/20" />
-        <p className="mt-3 text-xs font-medium text-white/50">等待发牌</p>
-        <p className="mt-1 text-[10px] leading-5 text-white/25">
+        <History className="mx-auto size-5 text-white/35" />
+        <p className="mt-3 text-sm font-medium text-white/70">等待发牌</p>
+        <p className="mt-1 text-xs leading-5 text-white/45">
           盲注、下注、跟注、弃牌与结算会依次出现在这里。
         </p>
       </div>
@@ -698,7 +710,7 @@ function Timeline({
         return (
           <div
             key={action.id}
-            className={`rounded-xl border px-3 py-2.5 ${isHero ? 'border-[#c9ff63]/15 bg-[#c9ff63]/[.035]' : 'border-white/[.055] bg-white/[.018]'}`}
+            className={`rounded-xl border px-3.5 py-3 ${isHero ? 'border-[#c9ff63]/22 bg-[#c9ff63]/[.05]' : 'border-white/[.09] bg-white/[.026]'}`}
           >
             <div className="flex items-start gap-2.5">
               <span
@@ -707,21 +719,21 @@ function Timeline({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <p
-                    className={`text-[11px] leading-5 ${isHero ? 'font-semibold text-[#dcffa2]' : 'text-white/62'}`}
+                    className={`text-xs leading-5 ${isHero ? 'font-semibold text-[#e4ffb5]' : 'text-white/72'}`}
                   >
                     {action.description}
                   </p>
-                  <span className="shrink-0 text-[8px] uppercase text-white/20">
+                  <span className="shrink-0 text-[10px] uppercase text-white/40">
                     {streetName(action.street)}
                   </span>
                 </div>
                 {revealReasons && action.reason && (
-                  <p className="mt-1 border-l border-white/8 pl-2 text-[9px] leading-4 text-white/30">
+                  <p className="mt-1.5 border-l border-white/12 pl-2.5 text-[11px] leading-5 text-white/48">
                     Bot 注释：{action.reason}
                   </p>
                 )}
               </div>
-              <span className="text-[9px] tabular-nums text-white/15">
+              <span className="text-[10px] tabular-nums text-white/30">
                 {index + 1}
               </span>
             </div>
@@ -742,15 +754,15 @@ function VerdictIcon({ verdict }: { verdict: AdviceItem['verdict'] }) {
 function AdviceView({ advice }: { advice: HandAdvice }) {
   return (
     <div>
-      <div className="flex items-center gap-3 rounded-2xl border border-[#c9ff63]/15 bg-[#c9ff63]/[.035] p-3.5">
-        <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#c9ff63] text-lg font-black text-[#11170f]">
+      <div className="flex items-center gap-3.5 rounded-2xl border border-[#c9ff63]/22 bg-[#c9ff63]/[.055] p-4">
+        <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-[#c9ff63] text-xl font-black text-[#11170f]">
           {advice.grade}
         </div>
         <div>
-          <p className="text-xs font-semibold text-white/80">
+          <p className="text-sm font-semibold text-white/90">
             {advice.headline}
           </p>
-          <p className="mt-0.5 text-[9px] text-white/30">
+          <p className="mt-1 text-[11px] text-white/50">
             启发式教练反馈 · 不是求解器答案
           </p>
         </div>
@@ -759,15 +771,13 @@ function AdviceView({ advice }: { advice: HandAdvice }) {
         {advice.items.map((item, index) => (
           <div
             key={`${item.title}-${index}`}
-            className="rounded-xl border border-white/[.06] bg-white/[.018] p-3"
+            className="rounded-xl border border-white/[.09] bg-white/[.026] p-4"
           >
-            <div className="flex items-center gap-2 text-[11px] font-semibold text-white/65">
+            <div className="flex items-center gap-2 text-xs font-semibold text-white/80">
               <VerdictIcon verdict={item.verdict} />
               {item.title}
             </div>
-            <p className="mt-1.5 text-[10px] leading-[1.65] text-white/38">
-              {item.text}
-            </p>
+            <p className="mt-2 text-xs leading-6 text-white/58">{item.text}</p>
           </div>
         ))}
       </div>
@@ -783,20 +793,20 @@ function RoundCoachReportView({
   compact?: boolean;
 }) {
   return (
-    <div className="space-y-3">
-      <div className="rounded-2xl border border-[#c9ff63]/18 bg-[#c9ff63]/[.04] p-4">
-        <div className="flex items-start gap-3">
-          <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#c9ff63] text-xl font-black text-[#11170f]">
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-[#c9ff63]/24 bg-[#c9ff63]/[.06] p-5">
+        <div className="flex items-start gap-4">
+          <div className="grid size-14 shrink-0 place-items-center rounded-2xl bg-[#c9ff63] text-2xl font-black text-[#11170f] shadow-[0_10px_30px_rgba(201,255,99,.12)]">
             {report.grade}
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#dfff9f]/50">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#dfff9f]/70">
               轮次教练总评
             </p>
-            <p className="mt-1 text-sm font-semibold text-white/85">
+            <p className="mt-1.5 text-lg font-semibold text-white/95">
               {report.headline}
             </p>
-            <p className="mt-1.5 text-[11px] leading-5 text-white/42">
+            <p className="mt-2 text-sm leading-6 text-white/62">
               {report.summary}
             </p>
           </div>
@@ -804,17 +814,17 @@ function RoundCoachReportView({
       </div>
 
       {!compact && (
-        <div className="grid gap-2 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2">
           {report.items.map((item, index) => (
             <div
               key={`${item.title}-${index}`}
-              className="rounded-xl border border-white/7 bg-white/[.02] p-3.5"
+              className="rounded-2xl border border-white/10 bg-white/[.028] p-4"
             >
-              <div className="flex items-center gap-2 text-xs font-semibold text-white/68">
+              <div className="flex items-center gap-2 text-sm font-semibold text-white/82">
                 <VerdictIcon verdict={item.verdict} />
                 {item.title}
               </div>
-              <p className="mt-2 text-[11px] leading-5 text-white/38">
+              <p className="mt-2 text-xs leading-6 text-white/58">
                 {item.text}
               </p>
             </div>
@@ -822,18 +832,18 @@ function RoundCoachReportView({
         </div>
       )}
 
-      <div className="rounded-2xl border border-sky-300/10 bg-sky-300/[.025] p-4">
+      <div className="rounded-2xl border border-sky-300/16 bg-sky-300/[.04] p-5">
         <div className="flex items-center gap-2">
-          <Lightbulb className="size-4 text-sky-300" />
-          <p className="text-xs font-semibold text-white/70">下一轮教学建议</p>
+          <Lightbulb className="size-5 text-sky-300" />
+          <p className="text-sm font-semibold text-white/82">下一轮教学建议</p>
         </div>
         <div className="mt-3 space-y-2">
           {report.nextSteps.map((step, index) => (
-            <div key={step} className="flex gap-2.5 text-[11px] leading-5">
-              <span className="grid size-5 shrink-0 place-items-center rounded-full bg-sky-300/10 text-[9px] font-bold text-sky-200/70">
+            <div key={step} className="flex gap-3 text-xs leading-6">
+              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-sky-300/12 text-[10px] font-bold text-sky-100/85">
                 {index + 1}
               </span>
-              <span className="text-white/42">{step}</span>
+              <span className="text-white/60">{step}</span>
             </div>
           ))}
         </div>
@@ -950,9 +960,9 @@ function MiniStat({
 }) {
   return (
     <div>
-      <div className="text-[10px] text-white/28">{label}</div>
+      <div className="text-xs font-medium text-white/50">{label}</div>
       <div
-        className={`mt-1 text-xl font-semibold tabular-nums ${tone === 'positive' ? 'text-[#c9ff63]' : tone === 'negative' ? 'text-rose-300' : 'text-white/78'}`}
+        className={`mt-1.5 text-xl font-semibold tabular-nums ${tone === 'positive' ? 'text-[#c9ff63]' : tone === 'negative' ? 'text-rose-300' : 'text-white/90'}`}
       >
         {value}
       </div>
@@ -962,12 +972,12 @@ function MiniStat({
 
 function HistoryReview({ record }: { record: HandRecord }) {
   return (
-    <div className="grid min-h-0 grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+    <div className="grid min-h-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="min-w-0">
-        <div className="rounded-2xl border border-white/8 bg-[#0d1412] p-4">
+        <div className="rounded-2xl border border-white/12 bg-[#0d1412] p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-[10px] text-white/30">
+              <p className="text-xs text-white/50">
                 本轮第 {record.roundHandNumber ?? record.handNumber} 手 · 总记录
                 #{record.handNumber} ·{' '}
                 {new Date(record.playedAt).toLocaleString('zh-CN', {
@@ -977,21 +987,21 @@ function HistoryReview({ record }: { record: HandRecord }) {
                   minute: '2-digit',
                 })}
               </p>
-              <p className="mt-1.5 text-sm font-semibold text-white/75">
+              <p className="mt-2 text-base font-semibold text-white/90">
                 {record.resultText}
               </p>
             </div>
             <Badge
               variant="outline"
-              className={`border-white/10 ${record.heroProfit >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
+              className={`border-white/14 px-3 py-1 text-sm ${record.heroProfit >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
             >
               Hero {record.heroProfit >= 0 ? '+' : ''}
               {record.heroProfit}
             </Badge>
           </div>
-          <div className="mt-4 flex flex-wrap items-end gap-5">
+          <div className="mt-5 flex flex-wrap items-end gap-6">
             <div>
-              <p className="mb-1.5 text-[9px] uppercase tracking-[0.12em] text-white/25">
+              <p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-white/50">
                 Hero 手牌
               </p>
               <div className="flex gap-1.5">
@@ -1005,7 +1015,7 @@ function HistoryReview({ record }: { record: HandRecord }) {
               </div>
             </div>
             <div>
-              <p className="mb-1.5 text-[9px] uppercase tracking-[0.12em] text-white/25">
+              <p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-white/50">
                 公共牌
               </p>
               <div className="flex gap-1.5">
@@ -1018,13 +1028,13 @@ function HistoryReview({ record }: { record: HandRecord }) {
                     />
                   ))
                 ) : (
-                  <span className="text-[10px] text-white/25">未发出</span>
+                  <span className="text-xs text-white/45">未发出</span>
                 )}
               </div>
             </div>
             <div className="ml-auto text-right">
-              <p className="text-[9px] text-white/25">最终底池</p>
-              <p className="mt-1 text-lg font-semibold text-amber-200">
+              <p className="text-xs text-white/50">最终底池</p>
+              <p className="mt-1 text-2xl font-semibold text-amber-200">
                 {record.pot}
               </p>
             </div>
@@ -1033,35 +1043,35 @@ function HistoryReview({ record }: { record: HandRecord }) {
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <div>
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/28">
+            <p className="mb-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
               完整行动
             </p>
-            <ScrollArea className="h-[360px] pr-2">
+            <ScrollArea className="h-[420px] pr-2">
               <Timeline actions={record.actions} revealReasons />
             </ScrollArea>
           </div>
           <div>
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/28">
+            <p className="mb-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
               所有玩家
             </p>
             <div className="space-y-2">
               {record.players.map((player) => (
                 <div
                   key={player.id}
-                  className="flex items-center gap-3 rounded-xl border border-white/6 bg-white/[.018] p-2.5"
+                  className="flex items-center gap-3 rounded-xl border border-white/9 bg-white/[.026] p-3"
                 >
-                  <div className="grid size-8 place-items-center rounded-lg bg-white/5 text-[10px] font-bold text-white/50">
+                  <div className="grid size-10 place-items-center rounded-xl bg-white/7 text-xs font-bold text-white/65">
                     {player.name.slice(0, 1)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 text-[10px] font-medium text-white/60">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-white/82">
                       {player.name}
-                      <span className="text-[8px] text-white/22">
+                      <span className="text-[10px] text-white/45">
                         {player.style}
                       </span>
                     </div>
                     <p
-                      className={`mt-0.5 text-[9px] tabular-nums ${player.endingStack - player.startingStack >= 0 ? 'text-[#c9ff63]/65' : 'text-rose-300/65'}`}
+                      className={`mt-1 text-[11px] tabular-nums ${player.endingStack - player.startingStack >= 0 ? 'text-[#c9ff63]/78' : 'text-rose-300/78'}`}
                     >
                       {player.startingStack} → {player.endingStack} (
                       {player.endingStack - player.startingStack >= 0
@@ -1088,7 +1098,7 @@ function HistoryReview({ record }: { record: HandRecord }) {
         </div>
       </div>
       <div>
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/28">
+        <p className="mb-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
           牌后教练
         </p>
         <AdviceView advice={record.advice} />
@@ -1109,7 +1119,7 @@ function RoundArchiveReview({
   const { round, hands } = entry;
   const selected =
     hands.find((hand) => hand.id === selectedHandId) ?? hands[0] ?? null;
-  const report = round.coachReport ?? generateRoundCoachReport(round, hands);
+  const report = generateRoundCoachReport(round, hands);
   const vpip = round.handsPlayed
     ? Math.round((round.vpipHands / round.handsPlayed) * 100)
     : 0;
@@ -1120,10 +1130,10 @@ function RoundArchiveReview({
 
   return (
     <div className="pb-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold text-white/88">
+            <h2 className="text-2xl font-semibold text-white/95">
               {entry.label}
             </h2>
             <Badge
@@ -1145,7 +1155,7 @@ function RoundArchiveReview({
               </Badge>
             )}
           </div>
-          <p className="mt-1.5 text-[10px] text-white/28">
+          <p className="mt-2 text-xs text-white/50">
             {new Date(round.startedAt).toLocaleString('zh-CN', {
               year: 'numeric',
               month: 'short',
@@ -1157,41 +1167,38 @@ function RoundArchiveReview({
           </p>
         </div>
         <p
-          className={`text-xl font-semibold tabular-nums ${profitBb >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
+          className={`text-2xl font-semibold tabular-nums ${profitBb >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
         >
           {profitBb >= 0 ? '+' : ''}
           {profitBb.toFixed(1)} BB
         </p>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-2xl border border-white/10 bg-white/[.03] p-4">
           <MiniStat label="本轮手牌" value={String(round.handsPlayed)} />
         </div>
-        <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+        <div className="rounded-2xl border border-white/10 bg-white/[.03] p-4">
           <MiniStat label="VPIP" value={`${vpip}%`} />
         </div>
-        <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+        <div className="rounded-2xl border border-white/10 bg-white/[.03] p-4">
           <MiniStat label="PFR" value={`${pfr}%`} />
         </div>
-        <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
-          <MiniStat
-            label="单手评分"
-            value={`A${round.gradeCounts.A} B${round.gradeCounts.B} C${round.gradeCounts.C}`}
-          />
+        <div className="rounded-2xl border border-white/10 bg-white/[.03] p-4">
+          <MiniStat label="教练总评" value={report.grade} />
         </div>
       </div>
 
-      <section className="mt-6">
-        <div className="mb-3 flex items-center gap-3">
-          <span className="grid size-7 place-items-center rounded-lg bg-[#c9ff63]/10 text-[10px] font-bold text-[#c9ff63]">
+      <section className="mt-8">
+        <div className="mb-4 flex items-center gap-3">
+          <span className="grid size-8 place-items-center rounded-lg bg-[#c9ff63]/12 text-xs font-bold text-[#c9ff63]">
             01
           </span>
           <div>
-            <h3 className="text-sm font-semibold text-white/78">
+            <h3 className="text-base font-semibold text-white/90">
               轮次整体报告
             </h3>
-            <p className="mt-0.5 text-[10px] text-white/28">
+            <p className="mt-1 text-xs text-white/50">
               先看整轮趋势与教学重点，再进入单手细节。
             </p>
           </div>
@@ -1199,16 +1206,16 @@ function RoundArchiveReview({
         <RoundCoachReportView report={report} />
       </section>
 
-      <section className="mt-8 border-t border-white/8 pt-6">
-        <div className="mb-3 flex items-center gap-3">
-          <span className="grid size-7 place-items-center rounded-lg bg-white/5 text-[10px] font-bold text-white/45">
+      <section className="mt-10 border-t border-white/12 pt-8">
+        <div className="mb-4 flex items-center gap-3">
+          <span className="grid size-8 place-items-center rounded-lg bg-white/7 text-xs font-bold text-white/65">
             02
           </span>
           <div>
-            <h3 className="text-sm font-semibold text-white/78">
+            <h3 className="text-base font-semibold text-white/90">
               本轮逐手复盘
             </h3>
-            <p className="mt-0.5 text-[10px] text-white/28">
+            <p className="mt-1 text-xs text-white/50">
               共 {hands.length} 手可复盘，每手保留独立的牌后建议。
             </p>
           </div>
@@ -1227,25 +1234,30 @@ function RoundArchiveReview({
                     type="button"
                     key={hand.id}
                     onClick={() => onSelectHand(hand.id)}
-                    className={`min-w-[132px] rounded-xl border px-3 py-2.5 text-left transition ${selected?.id === hand.id ? 'border-[#c9ff63]/25 bg-[#c9ff63]/[.055]' : 'border-white/7 bg-white/[.018] hover:border-white/14 hover:bg-white/[.035]'}`}
+                    className={`min-w-[158px] rounded-xl border p-3 text-left transition ${selected?.id === hand.id ? 'border-[#c9ff63]/35 bg-[#c9ff63]/[.08] shadow-[0_8px_24px_rgba(201,255,99,.06)]' : 'border-white/10 bg-white/[.028] hover:border-white/18 hover:bg-white/[.05]'}`}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-semibold text-white/55">
+                      <span className="text-xs font-semibold text-white/72">
                         本轮第 {hand.roundHandNumber ?? index + 1} 手
                       </span>
                       <span
-                        className={`text-[10px] font-bold tabular-nums ${hand.heroProfit >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
+                        className={`text-xs font-bold tabular-nums ${hand.heroProfit >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
                       >
                         {hand.heroProfit >= 0 ? '+' : ''}
                         {hand.heroProfit}
                       </span>
                     </div>
-                    <p className="mt-2 text-sm font-bold tracking-wide text-white/72">
+                    <p className="mt-2.5 text-base font-bold tracking-wide text-white/88">
                       {hand.heroCards.map(cardText).join('  ')}
                     </p>
-                    <p className="mt-1 text-[9px] text-white/25">
+                    <p className="mt-1.5 text-[11px] text-white/45">
                       底池 {hand.pot} · 评分 {hand.advice.grade}
                     </p>
+                    {Math.abs(hand.heroProfit) >= BIG_BLIND * 20 && (
+                      <p className="mt-2 text-[10px] font-semibold text-amber-200/75">
+                        重点复盘
+                      </p>
+                    )}
                   </button>
                 ))}
               </div>
@@ -1291,12 +1303,12 @@ function HistoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[94vh] max-w-[min(1280px,calc(100%-24px))] overflow-hidden border border-white/10 bg-[#09100e] p-0 text-white shadow-2xl sm:max-w-[min(1280px,calc(100%-32px))]">
-        <DialogHeader className="border-b border-white/8 px-5 py-4">
-          <DialogTitle className="flex items-center gap-2 text-base text-white/85">
-            <History className="size-4 text-[#c9ff63]" /> 训练档案
+      <DialogContent className="max-h-[94vh] max-w-[min(1360px,calc(100%-24px))] overflow-hidden border border-white/14 bg-[#09100e] p-0 text-white shadow-2xl sm:max-w-[min(1360px,calc(100%-32px))]">
+        <DialogHeader className="border-b border-white/12 px-6 py-5">
+          <DialogTitle className="flex items-center gap-2.5 text-xl text-white/95">
+            <History className="size-5 text-[#c9ff63]" /> 训练档案
           </DialogTitle>
-          <DialogDescription className="text-[10px] text-white/30">
+          <DialogDescription className="text-sm text-white/55">
             先按训练轮次查看整体报告与教学建议，再进入该轮的逐手复盘。
           </DialogDescription>
         </DialogHeader>
@@ -1311,9 +1323,9 @@ function HistoryDialog({
             </div>
           </div>
         ) : (
-          <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[230px_minmax(0,1fr)]">
-            <ScrollArea className="h-[155px] border-b border-white/8 bg-white/[.012] p-3 md:h-[calc(94vh-86px)] md:border-r md:border-b-0">
-              <div className="flex min-w-max gap-2 pr-2 md:block md:min-w-0 md:space-y-2">
+          <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[270px_minmax(0,1fr)]">
+            <ScrollArea className="h-[170px] border-b border-white/12 bg-white/[.018] p-4 md:h-[calc(94vh-104px)] md:border-r md:border-b-0">
+              <div className="flex min-w-max gap-3 pr-2 md:block md:min-w-0 md:space-y-3">
                 {entries.map((entry) => {
                   const profitBb = entry.round.heroProfit / BIG_BLIND;
                   return (
@@ -1323,22 +1335,22 @@ function HistoryDialog({
                       onClick={() =>
                         onSelectRound(entry.id, entry.hands[0]?.id ?? null)
                       }
-                      className={`w-[190px] rounded-xl border p-3 text-left transition md:w-full ${selectedEntry?.id === entry.id ? 'border-[#c9ff63]/22 bg-[#c9ff63]/[.055]' : 'border-transparent bg-white/[.012] hover:border-white/8 hover:bg-white/[.03]'}`}
+                      className={`w-[220px] rounded-2xl border p-4 text-left transition md:w-full ${selectedEntry?.id === entry.id ? 'border-[#c9ff63]/35 bg-[#c9ff63]/[.08] shadow-[0_10px_30px_rgba(201,255,99,.07)]' : 'border-white/7 bg-white/[.025] hover:border-white/14 hover:bg-white/[.045]'}`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-semibold text-white/68">
+                        <span className="text-sm font-semibold text-white/90">
                           {entry.label}
                         </span>
                         <span
-                          className={`size-1.5 rounded-full ${entry.round.status === 'active' ? 'animate-pulse bg-[#c9ff63]' : 'bg-white/18'}`}
+                          className={`size-2 rounded-full ${entry.round.status === 'active' ? 'animate-pulse bg-[#c9ff63]' : 'bg-white/30'}`}
                         />
                       </div>
-                      <div className="mt-2 flex items-end justify-between gap-3">
+                      <div className="mt-3 flex items-end justify-between gap-3">
                         <div>
-                          <p className="text-[9px] text-white/25">
+                          <p className="text-xs text-white/55">
                             {entry.round.handsPlayed} 手牌
                           </p>
-                          <p className="mt-1 text-[9px] text-white/20">
+                          <p className="mt-1 text-[11px] text-white/40">
                             {new Date(entry.round.startedAt).toLocaleDateString(
                               'zh-CN',
                               {
@@ -1349,7 +1361,7 @@ function HistoryDialog({
                           </p>
                         </div>
                         <span
-                          className={`text-sm font-bold tabular-nums ${profitBb >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
+                          className={`text-base font-bold tabular-nums ${profitBb >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
                         >
                           {profitBb >= 0 ? '+' : ''}
                           {profitBb.toFixed(1)} BB
@@ -1361,7 +1373,7 @@ function HistoryDialog({
               </div>
             </ScrollArea>
 
-            <ScrollArea className="h-[calc(94vh-241px)] p-4 sm:p-5 md:h-[calc(94vh-86px)]">
+            <ScrollArea className="h-[calc(94vh-274px)] p-5 sm:p-6 md:h-[calc(94vh-104px)]">
               {selectedEntry && (
                 <RoundArchiveReview
                   entry={selectedEntry}
@@ -1400,17 +1412,17 @@ function RoundSummaryDialog({
     ? Math.round((round.pfrHands / round.handsPlayed) * 100)
     : 0;
   const profitBb = round.heroProfit / BIG_BLIND;
-  const report = round.coachReport ?? generateRoundCoachReport(round, hands);
+  const report = generateRoundCoachReport(round, hands);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] max-w-[min(640px,calc(100%-24px))] overflow-hidden border border-white/10 bg-[#09100e] p-0 text-white shadow-2xl sm:max-w-[640px]">
-        <DialogHeader className="border-b border-white/8 px-5 py-4">
-          <DialogTitle className="flex items-center gap-2 text-base text-white/85">
-            <Flag className="size-4 text-[#c9ff63]" />
+        <DialogHeader className="border-b border-white/12 px-6 py-5">
+          <DialogTitle className="flex items-center gap-2 text-xl text-white/95">
+            <Flag className="size-5 text-[#c9ff63]" />
             本轮训练完成
           </DialogTitle>
-          <DialogDescription className="text-[10px] text-white/30">
+          <DialogDescription className="text-sm text-white/55">
             共完成 {round.handsPlayed} 手。先查看轮次总评，再进入逐手复盘。
           </DialogDescription>
         </DialogHeader>
