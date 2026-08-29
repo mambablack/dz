@@ -694,7 +694,7 @@ function Timeline({
       <div className="rounded-2xl border border-dashed border-white/10 px-5 py-9 text-center">
         <History className="mx-auto size-5 text-white/35" />
         <p className="mt-3 text-sm font-medium text-white/70">等待发牌</p>
-        <p className="mt-1 text-xs leading-5 text-white/45">
+        <p className="mt-1.5 text-sm leading-6 text-white/65">
           盲注、下注、跟注、弃牌与结算会依次出现在这里。
         </p>
       </div>
@@ -711,7 +711,7 @@ function Timeline({
         return (
           <div
             key={action.id}
-            className={`rounded-xl border px-3.5 py-3 ${isHero ? 'border-[#c9ff63]/22 bg-[#c9ff63]/[.05]' : 'border-white/[.09] bg-white/[.026]'}`}
+            className={`rounded-xl border px-4 py-3.5 ${isHero ? 'border-[#c9ff63]/22 bg-[#c9ff63]/[.05]' : 'border-white/[.09] bg-white/[.026]'}`}
           >
             <div className="flex items-start gap-2.5">
               <span
@@ -720,21 +720,21 @@ function Timeline({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <p
-                    className={`text-xs leading-5 ${isHero ? 'font-semibold text-[#e4ffb5]' : 'text-white/72'}`}
+                    className={`text-sm leading-6 ${isHero ? 'font-semibold text-[#e4ffb5]' : 'text-white/82'}`}
                   >
                     {action.description}
                   </p>
-                  <span className="shrink-0 text-[10px] uppercase text-white/40">
+                  <span className="shrink-0 text-xs uppercase text-white/55">
                     {streetName(action.street)}
                   </span>
                 </div>
                 {revealReasons && action.reason && (
-                  <p className="mt-1.5 border-l border-white/12 pl-2.5 text-[11px] leading-5 text-white/48">
+                  <p className="mt-2 border-l border-white/14 pl-3 text-[13px] leading-6 text-white/65">
                     Bot 注释：{action.reason}
                   </p>
                 )}
               </div>
-              <span className="text-[10px] tabular-nums text-white/30">
+              <span className="text-xs tabular-nums text-white/45">
                 {index + 1}
               </span>
             </div>
@@ -746,39 +746,41 @@ function Timeline({
 }
 
 function VerdictIcon({ verdict }: { verdict: AdviceItem['verdict'] }) {
-  if (verdict === 'good') return <Check className="size-3.5 text-[#c9ff63]" />;
+  if (verdict === 'good') return <Check className="size-4.5 text-[#c9ff63]" />;
   if (verdict === 'review')
-    return <Target className="size-3.5 text-amber-300" />;
-  return <Lightbulb className="size-3.5 text-sky-300" />;
+    return <Target className="size-4.5 text-amber-300" />;
+  return <Lightbulb className="size-4.5 text-sky-300" />;
 }
 
 function AdviceView({ advice }: { advice: HandAdvice }) {
   return (
     <div>
-      <div className="flex items-center gap-3.5 rounded-2xl border border-[#c9ff63]/22 bg-[#c9ff63]/[.055] p-4">
-        <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-[#c9ff63] text-xl font-black text-[#11170f]">
+      <div className="flex items-center gap-4 rounded-2xl border border-[#c9ff63]/24 bg-[#c9ff63]/[.065] p-5">
+        <div className="grid size-14 shrink-0 place-items-center rounded-2xl bg-[#c9ff63] text-2xl font-black text-[#11170f]">
           {advice.grade}
         </div>
         <div>
-          <p className="text-sm font-semibold text-white/90">
+          <p className="text-base font-semibold text-white/95">
             {advice.headline}
           </p>
-          <p className="mt-1 text-[11px] text-white/50">
+          <p className="mt-1.5 text-sm text-white/68">
             启发式教练反馈 · 不是求解器答案
           </p>
         </div>
       </div>
-      <div className="mt-3 space-y-2">
+      <div className="mt-4 space-y-3">
         {advice.items.map((item, index) => (
           <div
             key={`${item.title}-${index}`}
-            className="rounded-xl border border-white/[.09] bg-white/[.026] p-4"
+            className="rounded-2xl border border-white/[.11] bg-white/[.032] p-5"
           >
-            <div className="flex items-center gap-2 text-xs font-semibold text-white/80">
+            <div className="flex items-center gap-2.5 text-base font-semibold text-white/92">
               <VerdictIcon verdict={item.verdict} />
               {item.title}
             </div>
-            <p className="mt-2 text-xs leading-6 text-white/58">{item.text}</p>
+            <p className="mt-2.5 text-[15px] leading-7 text-white/76">
+              {item.text}
+            </p>
           </div>
         ))}
       </div>
@@ -794,20 +796,20 @@ function RoundCoachReportView({
   compact?: boolean;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-[#c9ff63]/24 bg-[#c9ff63]/[.06] p-5">
-        <div className="flex items-start gap-4">
-          <div className="grid size-14 shrink-0 place-items-center rounded-2xl bg-[#c9ff63] text-2xl font-black text-[#11170f] shadow-[0_10px_30px_rgba(201,255,99,.12)]">
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-[#c9ff63]/28 bg-[#c9ff63]/[.075] p-6">
+        <div className="flex items-start gap-5">
+          <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-[#c9ff63] text-3xl font-black text-[#11170f] shadow-[0_10px_30px_rgba(201,255,99,.14)]">
             {report.grade}
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#dfff9f]/70">
+            <p className="text-sm font-semibold uppercase tracking-[0.12em] text-[#dfff9f]/82">
               轮次教练总评
             </p>
-            <p className="mt-1.5 text-lg font-semibold text-white/95">
+            <p className="mt-2 text-xl font-semibold text-white">
               {report.headline}
             </p>
-            <p className="mt-2 text-sm leading-6 text-white/62">
+            <p className="mt-2.5 text-base leading-7 text-white/80">
               {report.summary}
             </p>
           </div>
@@ -815,17 +817,17 @@ function RoundCoachReportView({
       </div>
 
       {!compact && (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           {report.items.map((item, index) => (
             <div
               key={`${item.title}-${index}`}
-              className="rounded-2xl border border-white/10 bg-white/[.028] p-4"
+              className="rounded-2xl border border-white/12 bg-white/[.035] p-5"
             >
-              <div className="flex items-center gap-2 text-sm font-semibold text-white/82">
+              <div className="flex items-center gap-2.5 text-base font-semibold text-white/94">
                 <VerdictIcon verdict={item.verdict} />
                 {item.title}
               </div>
-              <p className="mt-2 text-xs leading-6 text-white/58">
+              <p className="mt-2.5 text-[15px] leading-7 text-white/78">
                 {item.text}
               </p>
             </div>
@@ -833,18 +835,20 @@ function RoundCoachReportView({
         </div>
       )}
 
-      <div className="rounded-2xl border border-sky-300/16 bg-sky-300/[.04] p-5">
+      <div className="rounded-2xl border border-sky-300/20 bg-sky-300/[.055] p-6">
         <div className="flex items-center gap-2">
-          <Lightbulb className="size-5 text-sky-300" />
-          <p className="text-sm font-semibold text-white/82">下一轮教学建议</p>
+          <Lightbulb className="size-6 text-sky-300" />
+          <p className="text-base font-semibold text-white/94">
+            下一轮教学建议
+          </p>
         </div>
-        <div className="mt-3 space-y-2">
+        <div className="mt-4 space-y-3">
           {report.nextSteps.map((step, index) => (
-            <div key={step} className="flex gap-3 text-xs leading-6">
-              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-sky-300/12 text-[10px] font-bold text-sky-100/85">
+            <div key={step} className="flex gap-3.5 text-[15px] leading-7">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-sky-300/14 text-xs font-bold text-sky-100/90">
                 {index + 1}
               </span>
-              <span className="text-white/60">{step}</span>
+              <span className="text-white/78">{step}</span>
             </div>
           ))}
         </div>
@@ -961,9 +965,9 @@ function MiniStat({
 }) {
   return (
     <div>
-      <div className="text-xs font-medium text-white/50">{label}</div>
+      <div className="text-sm font-medium text-white/68">{label}</div>
       <div
-        className={`mt-1.5 text-xl font-semibold tabular-nums ${tone === 'positive' ? 'text-[#c9ff63]' : tone === 'negative' ? 'text-rose-300' : 'text-white/90'}`}
+        className={`mt-2 text-2xl font-semibold tabular-nums ${tone === 'positive' ? 'text-[#c9ff63]' : tone === 'negative' ? 'text-rose-300' : 'text-white/95'}`}
       >
         {value}
       </div>
@@ -973,12 +977,12 @@ function MiniStat({
 
 function HistoryReview({ record }: { record: HandRecord }) {
   return (
-    <div className="grid min-h-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="grid min-h-0 grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0">
-        <div className="rounded-2xl border border-white/12 bg-[#0d1412] p-5">
+        <div className="rounded-2xl border border-white/14 bg-[#0d1412] p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs text-white/50">
+              <p className="text-sm text-white/68">
                 本轮第 {record.roundHandNumber ?? record.handNumber} 手 · 总记录
                 #{record.handNumber} ·{' '}
                 {new Date(record.playedAt).toLocaleString('zh-CN', {
@@ -988,21 +992,21 @@ function HistoryReview({ record }: { record: HandRecord }) {
                   minute: '2-digit',
                 })}
               </p>
-              <p className="mt-2 text-base font-semibold text-white/90">
+              <p className="mt-2.5 text-lg font-semibold leading-7 text-white/95">
                 {formatHandRecordResult(record)}
               </p>
             </div>
             <Badge
               variant="outline"
-              className={`border-white/14 px-3 py-1 text-sm ${record.heroProfit >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
+              className={`border-white/16 px-3.5 py-1.5 text-base ${record.heroProfit >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
             >
               Hero {record.heroProfit >= 0 ? '+' : ''}
               {record.heroProfit}
             </Badge>
           </div>
-          <div className="mt-5 flex flex-wrap items-end gap-6">
+          <div className="mt-6 flex flex-wrap items-end gap-7">
             <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-white/50">
+              <p className="mb-2.5 text-sm font-medium uppercase tracking-[0.1em] text-white/68">
                 Hero 手牌
               </p>
               <div className="flex gap-1.5">
@@ -1016,7 +1020,7 @@ function HistoryReview({ record }: { record: HandRecord }) {
               </div>
             </div>
             <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-white/50">
+              <p className="mb-2.5 text-sm font-medium uppercase tracking-[0.1em] text-white/68">
                 公共牌
               </p>
               <div className="flex gap-1.5">
@@ -1029,22 +1033,22 @@ function HistoryReview({ record }: { record: HandRecord }) {
                     />
                   ))
                 ) : (
-                  <span className="text-xs text-white/45">未发出</span>
+                  <span className="text-sm text-white/60">未发出</span>
                 )}
               </div>
             </div>
             <div className="ml-auto text-right">
-              <p className="text-xs text-white/50">最终底池</p>
-              <p className="mt-1 text-2xl font-semibold text-amber-200">
+              <p className="text-sm text-white/68">最终底池</p>
+              <p className="mt-1.5 text-3xl font-semibold text-amber-200">
                 {record.pot}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="mt-5 grid gap-5 md:grid-cols-2">
           <div>
-            <p className="mb-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.12em] text-white/68">
               完整行动
             </p>
             <ScrollArea className="h-[420px] pr-2">
@@ -1052,27 +1056,27 @@ function HistoryReview({ record }: { record: HandRecord }) {
             </ScrollArea>
           </div>
           <div>
-            <p className="mb-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.12em] text-white/68">
               所有玩家
             </p>
             <div className="space-y-2">
               {record.players.map((player) => (
                 <div
                   key={player.id}
-                  className="flex items-center gap-3 rounded-xl border border-white/9 bg-white/[.026] p-3"
+                  className="flex items-center gap-3.5 rounded-xl border border-white/11 bg-white/[.032] p-4"
                 >
-                  <div className="grid size-10 place-items-center rounded-xl bg-white/7 text-xs font-bold text-white/65">
+                  <div className="grid size-11 place-items-center rounded-xl bg-white/8 text-sm font-bold text-white/75">
                     {player.name.slice(0, 1)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-white/82">
+                    <div className="flex items-center gap-2 text-sm font-medium text-white/92">
                       {player.name}
-                      <span className="text-[10px] text-white/45">
+                      <span className="text-xs text-white/60">
                         {player.style}
                       </span>
                     </div>
                     <p
-                      className={`mt-1 text-[11px] tabular-nums ${player.endingStack - player.startingStack >= 0 ? 'text-[#c9ff63]/78' : 'text-rose-300/78'}`}
+                      className={`mt-1.5 text-sm tabular-nums ${player.endingStack - player.startingStack >= 0 ? 'text-[#c9ff63]/85' : 'text-rose-300/85'}`}
                     >
                       {player.startingStack} → {player.endingStack} (
                       {player.endingStack - player.startingStack >= 0
@@ -1082,7 +1086,7 @@ function HistoryReview({ record }: { record: HandRecord }) {
                     </p>
                   </div>
                   <div
-                    className={`flex gap-1 ${player.folded ? 'opacity-45' : ''}`}
+                    className={`flex gap-1.5 ${player.folded ? 'opacity-55' : ''}`}
                   >
                     {player.cards.map((card, index) => (
                       <PokerCard
@@ -1130,19 +1134,17 @@ function RoundArchiveReview({
   const profitBb = round.heroProfit / BIG_BLIND;
 
   return (
-    <div className="pb-6">
+    <div className="pb-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold text-white/95">
-              {entry.label}
-            </h2>
+            <h2 className="text-3xl font-semibold text-white">{entry.label}</h2>
             <Badge
               variant="outline"
               className={
                 round.status === 'active'
-                  ? 'border-[#c9ff63]/20 text-[#c9ff63]'
-                  : 'border-white/10 text-white/40'
+                  ? 'border-[#c9ff63]/25 px-3 py-1 text-sm text-[#c9ff63]'
+                  : 'border-white/12 px-3 py-1 text-sm text-white/60'
               }
             >
               {round.status === 'active' ? '进行中' : '已完成'}
@@ -1150,13 +1152,13 @@ function RoundArchiveReview({
             {entry.legacy && (
               <Badge
                 variant="outline"
-                className="border-amber-200/10 text-amber-100/45"
+                className="border-amber-200/14 px-3 py-1 text-sm text-amber-100/65"
               >
                 历史记录
               </Badge>
             )}
           </div>
-          <p className="mt-2 text-xs text-white/50">
+          <p className="mt-2.5 text-sm text-white/68">
             {new Date(round.startedAt).toLocaleString('zh-CN', {
               year: 'numeric',
               month: 'short',
@@ -1168,38 +1170,38 @@ function RoundArchiveReview({
           </p>
         </div>
         <p
-          className={`text-2xl font-semibold tabular-nums ${profitBb >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
+          className={`text-3xl font-semibold tabular-nums ${profitBb >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
         >
           {profitBb >= 0 ? '+' : ''}
           {profitBb.toFixed(1)} BB
         </p>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-2xl border border-white/10 bg-white/[.03] p-4">
+      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="rounded-2xl border border-white/12 bg-white/[.04] p-5">
           <MiniStat label="本轮手牌" value={String(round.handsPlayed)} />
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[.03] p-4">
+        <div className="rounded-2xl border border-white/12 bg-white/[.04] p-5">
           <MiniStat label="VPIP" value={`${vpip}%`} />
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[.03] p-4">
+        <div className="rounded-2xl border border-white/12 bg-white/[.04] p-5">
           <MiniStat label="PFR" value={`${pfr}%`} />
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[.03] p-4">
+        <div className="rounded-2xl border border-white/12 bg-white/[.04] p-5">
           <MiniStat label="教练总评" value={report.grade} />
         </div>
       </div>
 
-      <section className="mt-8">
+      <section className="mt-10">
         <div className="mb-4 flex items-center gap-3">
-          <span className="grid size-8 place-items-center rounded-lg bg-[#c9ff63]/12 text-xs font-bold text-[#c9ff63]">
+          <span className="grid size-10 place-items-center rounded-xl bg-[#c9ff63]/14 text-sm font-bold text-[#c9ff63]">
             01
           </span>
           <div>
-            <h3 className="text-base font-semibold text-white/90">
+            <h3 className="text-xl font-semibold text-white/95">
               轮次整体报告
             </h3>
-            <p className="mt-1 text-xs text-white/50">
+            <p className="mt-1.5 text-sm text-white/68">
               先看整轮趋势与教学重点，再进入单手细节。
             </p>
           </div>
@@ -1207,23 +1209,23 @@ function RoundArchiveReview({
         <RoundCoachReportView report={report} />
       </section>
 
-      <section className="mt-10 border-t border-white/12 pt-8">
+      <section className="mt-12 border-t border-white/14 pt-10">
         <div className="mb-4 flex items-center gap-3">
-          <span className="grid size-8 place-items-center rounded-lg bg-white/7 text-xs font-bold text-white/65">
+          <span className="grid size-10 place-items-center rounded-xl bg-white/8 text-sm font-bold text-white/75">
             02
           </span>
           <div>
-            <h3 className="text-base font-semibold text-white/90">
+            <h3 className="text-xl font-semibold text-white/95">
               本轮逐手复盘
             </h3>
-            <p className="mt-1 text-xs text-white/50">
+            <p className="mt-1.5 text-sm text-white/68">
               共 {hands.length} 手可复盘，每手保留独立的牌后建议。
             </p>
           </div>
         </div>
 
         {hands.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/8 p-8 text-center text-xs text-white/30">
+          <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center text-sm text-white/55">
             本轮完成第一手后，这里会出现逐手复盘。
           </div>
         ) : (
@@ -1235,27 +1237,27 @@ function RoundArchiveReview({
                     type="button"
                     key={hand.id}
                     onClick={() => onSelectHand(hand.id)}
-                    className={`min-w-[158px] rounded-xl border p-3 text-left transition ${selected?.id === hand.id ? 'border-[#c9ff63]/35 bg-[#c9ff63]/[.08] shadow-[0_8px_24px_rgba(201,255,99,.06)]' : 'border-white/10 bg-white/[.028] hover:border-white/18 hover:bg-white/[.05]'}`}
+                    className={`min-w-[180px] rounded-2xl border p-4 text-left transition ${selected?.id === hand.id ? 'border-[#c9ff63]/40 bg-[#c9ff63]/[.1] shadow-[0_8px_24px_rgba(201,255,99,.07)]' : 'border-white/12 bg-white/[.035] hover:border-white/20 hover:bg-white/[.055]'}`}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs font-semibold text-white/72">
+                      <span className="text-sm font-semibold text-white/82">
                         本轮第 {hand.roundHandNumber ?? index + 1} 手
                       </span>
                       <span
-                        className={`text-xs font-bold tabular-nums ${hand.heroProfit >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
+                        className={`text-sm font-bold tabular-nums ${hand.heroProfit >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
                       >
                         {hand.heroProfit >= 0 ? '+' : ''}
                         {hand.heroProfit}
                       </span>
                     </div>
-                    <p className="mt-2.5 text-base font-bold tracking-wide text-white/88">
+                    <p className="mt-3 text-lg font-bold tracking-wide text-white/95">
                       {hand.heroCards.map(cardText).join('  ')}
                     </p>
-                    <p className="mt-1.5 text-[11px] text-white/45">
+                    <p className="mt-2 text-xs text-white/62">
                       底池 {hand.pot} · 评分 {hand.advice.grade}
                     </p>
                     {Math.abs(hand.heroProfit) >= BIG_BLIND * 20 && (
-                      <p className="mt-2 text-[10px] font-semibold text-amber-200/75">
+                      <p className="mt-2.5 text-xs font-semibold text-amber-200/85">
                         重点复盘
                       </p>
                     )}
@@ -1304,12 +1306,12 @@ function HistoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[94vh] max-w-[min(1360px,calc(100%-24px))] overflow-hidden border border-white/14 bg-[#09100e] p-0 text-white shadow-2xl sm:max-w-[min(1360px,calc(100%-32px))]">
-        <DialogHeader className="border-b border-white/12 px-6 py-5">
-          <DialogTitle className="flex items-center gap-2.5 text-xl text-white/95">
-            <History className="size-5 text-[#c9ff63]" /> 训练档案
+      <DialogContent className="max-h-[94vh] max-w-[min(1560px,calc(100%-20px))] overflow-hidden border border-white/16 bg-[#09100e] p-0 text-white shadow-2xl sm:max-w-[min(1560px,calc(100%-32px))]">
+        <DialogHeader className="border-b border-white/14 px-7 py-6">
+          <DialogTitle className="flex items-center gap-3 text-2xl text-white">
+            <History className="size-6 text-[#c9ff63]" /> 训练档案
           </DialogTitle>
-          <DialogDescription className="text-sm text-white/55">
+          <DialogDescription className="text-base text-white/72">
             先按训练轮次查看整体报告与教学建议，再进入该轮的逐手复盘。
           </DialogDescription>
         </DialogHeader>
@@ -1324,8 +1326,8 @@ function HistoryDialog({
             </div>
           </div>
         ) : (
-          <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[270px_minmax(0,1fr)]">
-            <ScrollArea className="h-[170px] border-b border-white/12 bg-white/[.018] p-4 md:h-[calc(94vh-104px)] md:border-r md:border-b-0">
+          <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[300px_minmax(0,1fr)]">
+            <ScrollArea className="h-[190px] border-b border-white/14 bg-white/[.024] p-5 md:h-[calc(94vh-116px)] md:border-r md:border-b-0">
               <div className="flex min-w-max gap-3 pr-2 md:block md:min-w-0 md:space-y-3">
                 {entries.map((entry) => {
                   const profitBb = entry.round.heroProfit / BIG_BLIND;
@@ -1336,10 +1338,10 @@ function HistoryDialog({
                       onClick={() =>
                         onSelectRound(entry.id, entry.hands[0]?.id ?? null)
                       }
-                      className={`w-[220px] rounded-2xl border p-4 text-left transition md:w-full ${selectedEntry?.id === entry.id ? 'border-[#c9ff63]/35 bg-[#c9ff63]/[.08] shadow-[0_10px_30px_rgba(201,255,99,.07)]' : 'border-white/7 bg-white/[.025] hover:border-white/14 hover:bg-white/[.045]'}`}
+                      className={`w-[250px] rounded-2xl border p-5 text-left transition md:w-full ${selectedEntry?.id === entry.id ? 'border-[#c9ff63]/40 bg-[#c9ff63]/[.1] shadow-[0_10px_30px_rgba(201,255,99,.08)]' : 'border-white/10 bg-white/[.032] hover:border-white/18 hover:bg-white/[.055]'}`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-semibold text-white/90">
+                        <span className="text-base font-semibold text-white/95">
                           {entry.label}
                         </span>
                         <span
@@ -1348,10 +1350,10 @@ function HistoryDialog({
                       </div>
                       <div className="mt-3 flex items-end justify-between gap-3">
                         <div>
-                          <p className="text-xs text-white/55">
+                          <p className="text-sm text-white/68">
                             {entry.round.handsPlayed} 手牌
                           </p>
-                          <p className="mt-1 text-[11px] text-white/40">
+                          <p className="mt-1.5 text-xs text-white/55">
                             {new Date(entry.round.startedAt).toLocaleDateString(
                               'zh-CN',
                               {
@@ -1362,7 +1364,7 @@ function HistoryDialog({
                           </p>
                         </div>
                         <span
-                          className={`text-base font-bold tabular-nums ${profitBb >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
+                          className={`text-lg font-bold tabular-nums ${profitBb >= 0 ? 'text-[#c9ff63]' : 'text-rose-300'}`}
                         >
                           {profitBb >= 0 ? '+' : ''}
                           {profitBb.toFixed(1)} BB
@@ -1374,7 +1376,7 @@ function HistoryDialog({
               </div>
             </ScrollArea>
 
-            <ScrollArea className="h-[calc(94vh-274px)] p-5 sm:p-6 md:h-[calc(94vh-104px)]">
+            <ScrollArea className="h-[calc(94vh-306px)] p-6 sm:p-7 md:h-[calc(94vh-116px)]">
               {selectedEntry && (
                 <RoundArchiveReview
                   entry={selectedEntry}
@@ -1417,25 +1419,25 @@ function RoundSummaryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-[min(640px,calc(100%-24px))] overflow-hidden border border-white/10 bg-[#09100e] p-0 text-white shadow-2xl sm:max-w-[640px]">
+      <DialogContent className="max-h-[92vh] max-w-[min(760px,calc(100%-24px))] overflow-hidden border border-white/14 bg-[#09100e] p-0 text-white shadow-2xl sm:max-w-[760px]">
         <DialogHeader className="border-b border-white/12 px-6 py-5">
           <DialogTitle className="flex items-center gap-2 text-xl text-white/95">
             <Flag className="size-5 text-[#c9ff63]" />
             本轮训练完成
           </DialogTitle>
-          <DialogDescription className="text-sm text-white/55">
+          <DialogDescription className="text-base text-white/72">
             共完成 {round.handsPlayed} 手。先查看轮次总评，再进入逐手复盘。
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-[calc(92vh-82px)]">
-          <div className="p-5">
+          <div className="p-6">
             <RoundCoachReportView report={report} compact />
 
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-xl border border-white/10 bg-white/[.035] p-4">
                 <MiniStat label="本轮手牌" value={String(round.handsPlayed)} />
               </div>
-              <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+              <div className="rounded-xl border border-white/10 bg-white/[.035] p-4">
                 <MiniStat
                   label="本轮盈亏"
                   value={`${profitBb >= 0 ? '+' : ''}${profitBb.toFixed(1)} BB`}
@@ -1448,17 +1450,17 @@ function RoundSummaryDialog({
                   }
                 />
               </div>
-              <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+              <div className="rounded-xl border border-white/10 bg-white/[.035] p-4">
                 <MiniStat label="VPIP" value={`${vpip}%`} />
               </div>
-              <div className="rounded-xl border border-white/7 bg-white/[.02] p-3">
+              <div className="rounded-xl border border-white/10 bg-white/[.035] p-4">
                 <MiniStat label="PFR" value={`${pfr}%`} />
               </div>
             </div>
 
-            <div className="mt-3 flex items-center justify-between rounded-xl border border-white/7 bg-white/[.018] px-3 py-2.5 text-[10px]">
-              <span className="text-white/35">逐手评分</span>
-              <span className="tabular-nums text-white/60">
+            <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/[.028] px-4 py-3 text-sm">
+              <span className="text-white/65">逐手评分</span>
+              <span className="tabular-nums text-white/82">
                 A {round.gradeCounts.A} · B {round.gradeCounts.B} · C{' '}
                 {round.gradeCounts.C}
               </span>

@@ -1285,7 +1285,7 @@ export function formatHandRecordResult(record: HandRecord) {
   const winnerDetails = winners
     .map((winner) => {
       const hand = bestHand([...winner.cards, ...record.board]);
-      return `${winner.name}（${winner.cards.map(cardText).join(' ')}）— ${describeEvaluatedHand(hand)}`;
+      return `${winner.name}（${winner.cards.map(cardText).join(' ')}）— 牌型：${describeEvaluatedHand(hand)}`;
     })
     .join('；');
   return `赢家：${winnerDetails}｜最终底池：${record.pot} 筹码`;
