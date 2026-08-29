@@ -19,6 +19,7 @@ import {
   TimerReset,
   ShieldCheck,
   Target,
+  Trophy,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,10 +43,11 @@ import {
   chooseBotDecision,
   createReadyGame,
   createTrainingRound,
+  getGameResultBreakdown,
+  getHandRecordResultBreakdown,
   getPot,
   getToCall,
   generateRoundCoachReport,
-  formatHandRecordResult,
   isRedSuit,
   positionLabel,
   preflopStrength,
@@ -61,6 +63,7 @@ import {
   type GameState,
   type HandAdvice,
   type HandRecord,
+  type HandResultBreakdown,
   type TrainingRoundRecord,
   type RoundCoachReport,
   type Player,
@@ -268,6 +271,146 @@ function PokerCard({
   );
 }
 
+function HandResultCard({
+  result,
+  compact = false,
+}: {
+  result: HandResultBreakdown;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`w-full rounded-2xl border border-[#c9ff63]/30 bg-[#08110d]/97 ${compact ? 'p-3' : 'p-5'} text-left shadow-[0_20px_60px_rgba(0,0,0,.42)]`}
+    >
+      <div className="flex items-center gap-3 border-b border-white/10 pb-3">
+        <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#c9ff63]/14 text-[#c9ff63]">
+          <Trophy className="size-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-base font-bold text-white/95">
+            {result.showdown ? '摊牌结果' : '本手赢家'}
+          </p>
+          <p className="mt-0.5 text-xs text-white/58">
+            {result.showdown
+              ? '赢家、手牌、获胜牌型与筹码分配'
+              : '其他玩家全部弃牌，本手没有比较牌型'}
+          </p>
+        </div>
+        <div className="ml-auto shrink-0 text-right">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/45">
+            最终底池
+          </p>
+          <p className="mt-0.5 text-xl font-black tabular-nums text-amber-200">
+            {result.totalPot}
+            <span className="ml-1 text-xs font-medium text-amber-100/55">
+              筹码
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <div
+        className={`mt-3 space-y-2 ${compact ? 'max-h-[210px] overflow-y-auto pr-1' : ''}`}
+      >
+        {result.rows.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-white/12 px-4 py-5 text-center text-sm text-white/55">
+            结算明细暂未记录
+          </div>
+        ) : (
+          result.rows.map((row, index) => {
+            const handDetail =
+              row.handDescription &&
+              row.handName &&
+              row.handDescription.startsWith(row.handName)
+                ? row.handDescription.slice(row.handName.length)
+                : row.handDescription;
+            return (
+              <div
+                key={`${row.potLabel}-${row.winnerName}-${index}`}
+                className={`grid gap-3 rounded-xl border border-white/10 bg-white/[.035] ${compact ? 'p-3' : 'p-4'} sm:grid-cols-[minmax(0,.95fr)_minmax(0,1.2fr)_auto] sm:items-center`}
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className="border-[#c9ff63]/25 bg-[#c9ff63]/[.06] text-[#dfff9f]"
+                    >
+                      {row.potLabel}
+                    </Badge>
+                    {row.isSplit && (
+                      <span className="text-xs font-semibold text-sky-200/80">
+                        平分
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/45">
+                    赢家
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="text-xl font-black text-white">
+                      {row.winnerName}
+                    </span>
+                    {row.cards && (
+                      <span className="rounded-lg border border-white/12 bg-black/25 px-2.5 py-1 font-mono text-base font-bold tracking-wide text-white/90">
+                        {row.cards}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="min-w-0 border-white/10 sm:border-l sm:pl-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/45">
+                    {result.showdown ? '获胜牌型' : '获胜方式'}
+                  </p>
+                  {result.showdown ? (
+                    <>
+                      <p className="mt-1 text-2xl font-black text-amber-200">
+                        {row.handName ?? '牌型未记录'}
+                      </p>
+                      {handDetail && (
+                        <p className="mt-1 text-sm font-medium leading-5 text-white/72">
+                          {handDetail}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="mt-1 text-lg font-bold text-[#dfff9f]">
+                        其他玩家全部弃牌
+                      </p>
+                      <p className="mt-1 text-sm text-white/58">
+                        未进行摊牌，因此没有获胜牌型
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                <div className="shrink-0 border-white/10 sm:border-l sm:pl-4 sm:text-right">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/45">
+                    赢得
+                  </p>
+                  {row.amount === null ? (
+                    <p className="mt-1 text-sm font-semibold text-white/65">
+                      分配未记录
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-2xl font-black tabular-nums text-[#c9ff63]">
+                      {row.amount}
+                      <span className="ml-1 text-xs font-medium text-[#dfff9f]/60">
+                        筹码
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PlayerSeat({
   player,
   index,
@@ -352,6 +495,8 @@ function PlayerSeat({
 function TableCenter({ game }: { game: GameState }) {
   const currentPlayer =
     game.actingIndex >= 0 ? game.players[game.actingIndex] : null;
+  const result =
+    game.status === 'complete' ? getGameResultBreakdown(game) : null;
   return (
     <div className="absolute left-1/2 top-[45%] z-10 flex w-[min(94%,760px)] -translate-x-1/2 -translate-y-1/2 flex-col items-center">
       {game.status === 'ready' ? (
@@ -411,9 +556,9 @@ function TableCenter({ game }: { game: GameState }) {
                 : `${currentPlayer.name} 正在思考`}
             </p>
           )}
-          {game.status === 'complete' && (
-            <div className="mt-3 max-w-[680px] rounded-2xl border border-[#c9ff63]/25 bg-[#0c1711]/95 px-6 py-3 text-center text-sm font-semibold leading-6 text-[#e5ffb7] shadow-xl sm:text-base">
-              {game.resultText}
+          {result && (
+            <div className="mt-3 w-full">
+              <HandResultCard result={result} compact />
             </div>
           )}
         </>
@@ -979,6 +1124,7 @@ function MiniStat({
 
 function HistoryReview({ record }: { record: HandRecord }) {
   const refreshedAdvice = refreshHandAdvice(record);
+  const result = getHandRecordResultBreakdown(record);
   return (
     <div className="grid min-h-0 grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0">
@@ -995,9 +1141,6 @@ function HistoryReview({ record }: { record: HandRecord }) {
                   minute: '2-digit',
                 })}
               </p>
-              <p className="mt-2.5 text-lg font-semibold leading-7 text-white/95">
-                {formatHandRecordResult(record)}
-              </p>
             </div>
             <Badge
               variant="outline"
@@ -1006,6 +1149,9 @@ function HistoryReview({ record }: { record: HandRecord }) {
               Hero {record.heroProfit >= 0 ? '+' : ''}
               {record.heroProfit}
             </Badge>
+          </div>
+          <div className="mt-5">
+            <HandResultCard result={result} />
           </div>
           <div className="mt-6 flex flex-wrap items-end gap-7">
             <div>
@@ -1039,12 +1185,6 @@ function HistoryReview({ record }: { record: HandRecord }) {
                   <span className="text-sm text-white/60">未发出</span>
                 )}
               </div>
-            </div>
-            <div className="ml-auto text-right">
-              <p className="text-sm text-white/68">最终底池</p>
-              <p className="mt-1.5 text-3xl font-semibold text-amber-200">
-                {record.pot}
-              </p>
             </div>
           </div>
         </div>
@@ -1740,7 +1880,7 @@ export default function PokerTrainer() {
       return;
     }
 
-    setAutoNextCountdown(3);
+    setAutoNextCountdown(6);
     const interval = window.setInterval(() => {
       setAutoNextCountdown((current) =>
         current === null ? null : Math.max(0, current - 1),
@@ -1751,7 +1891,7 @@ export default function PokerTrainer() {
       setGame((current) =>
         current.status === 'complete' ? startNextHand(current) : current,
       );
-    }, 3000);
+    }, 6000);
     return () => {
       window.clearInterval(interval);
       window.clearTimeout(timeout);

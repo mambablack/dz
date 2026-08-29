@@ -98,6 +98,22 @@ export interface SidePotResult {
   }>;
 }
 
+export interface HandResultBreakdownRow {
+  potLabel: string;
+  winnerName: string;
+  cards: string;
+  handName: string | null;
+  handDescription: string | null;
+  amount: number | null;
+  isSplit: boolean;
+}
+
+export interface HandResultBreakdown {
+  showdown: boolean;
+  totalPot: number;
+  rows: HandResultBreakdownRow[];
+}
+
 export interface GameState {
   handId: string;
   handNumber: number;
@@ -152,6 +168,7 @@ export interface HandRecord {
   resultText: string;
   winnerNames: string[];
   showdown: boolean;
+  sidePots?: SidePotResult[];
   advice: HandAdvice;
   heroStats: {
     vpip: boolean;
@@ -971,6 +988,131 @@ function resolveShowdown(state: GameState): GameState {
   return state;
 }
 
+function resultRowsFromSidePots(
+  pots: SidePotResult[],
+): HandResultBreakdownRow[] {
+  return pots.flatMap((pot, potIndex) => {
+    const potLabel =
+      pots.length === 1 ? '主池' : potIndex === 0 ? '主池' : `边池 ${potIndex}`;
+    const payouts =
+      pot.payouts.length > 0
+        ? pot.payouts
+        : pot.winners.map((name) => ({
+            name,
+            amount:
+              pot.winners.length === 1
+                ? pot.amount
+                : Math.floor(pot.amount / pot.winners.length),
+          }));
+    return payouts.map((payout) => {
+      const winnerIndex = pot.winners.indexOf(payout.name);
+      return {
+        potLabel,
+        winnerName: payout.name,
+        cards: pot.winnerCards[winnerIndex] ?? '',
+        handName: pot.handName,
+        handDescription: pot.handDescription,
+        amount: payout.amount,
+        isSplit: pot.winners.length > 1,
+      };
+    });
+  });
+}
+
+function fallbackShowdownRows(
+  winners: Array<{ name: string; cards: Card[] }>,
+  board: Card[],
+  totalPot: number,
+): HandResultBreakdownRow[] {
+  return winners.map((winner) => {
+    const hand = bestHand([...winner.cards, ...board]);
+    return {
+      potLabel: '主池',
+      winnerName: winner.name,
+      cards: winner.cards.map(cardText).join(' '),
+      handName: hand.name,
+      handDescription: describeEvaluatedHand(hand),
+      amount: winners.length === 1 ? totalPot : null,
+      isSplit: winners.length > 1,
+    };
+  });
+}
+
+export function getGameResultBreakdown(state: GameState): HandResultBreakdown {
+  if (state.showdown) {
+    const rows =
+      state.sidePots.length > 0
+        ? resultRowsFromSidePots(state.sidePots)
+        : fallbackShowdownRows(
+            state.players
+              .filter((player) => state.winnerIds.includes(player.id))
+              .map((player) => ({
+                name: player.name,
+                cards: player.holeCards,
+              })),
+            state.board,
+            state.finalPot,
+          );
+    return { showdown: true, totalPot: state.finalPot, rows };
+  }
+
+  const winner = state.players.find((player) =>
+    state.winnerIds.includes(player.id),
+  );
+  return {
+    showdown: false,
+    totalPot: state.finalPot,
+    rows: winner
+      ? [
+          {
+            potLabel: '整池',
+            winnerName: winner.name,
+            cards: '',
+            handName: null,
+            handDescription: null,
+            amount: state.finalPot,
+            isSplit: false,
+          },
+        ]
+      : [],
+  };
+}
+
+export function getHandRecordResultBreakdown(
+  record: HandRecord,
+): HandResultBreakdown {
+  if (record.showdown) {
+    const rows =
+      record.sidePots && record.sidePots.length > 0
+        ? resultRowsFromSidePots(record.sidePots)
+        : fallbackShowdownRows(
+            record.players
+              .filter((player) => record.winnerNames.includes(player.name))
+              .map((player) => ({ name: player.name, cards: player.cards })),
+            record.board,
+            record.pot,
+          );
+    return { showdown: true, totalPot: record.pot, rows };
+  }
+
+  const winnerName = record.winnerNames.join('、') || '最后未弃牌的玩家';
+  return {
+    showdown: false,
+    totalPot: record.pot,
+    rows: [
+      {
+        potLabel: '整池',
+        winnerName,
+        cards: '',
+        handName: null,
+        handDescription: null,
+        amount: record.pot,
+        isSplit: false,
+      },
+    ],
+  };
+}
+
 export function preflopStrength(cards: Card[]): number {
   if (cards.length < 2) return 0;
   const first = RANK_VALUE[cards[0].rank];
@@ -1361,6 +1503,12 @@ export function toHandRecord(
     resultText: state.resultText,
     winnerNames,
     showdown: state.showdown,
+    sidePots: state.sidePots.map((sidePot) => ({
+      ...sidePot,
+      winners: [...sidePot.winners],
+      winnerCards: [...sidePot.winnerCards],
+      payouts: sidePot.payouts.map((payout) => ({ ...payout })),
+    })),
     advice: state.advice ?? generateAdvice(state),
     heroStats: {
       vpip: heroPreflop.some((action) =>

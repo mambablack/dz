@@ -10,6 +10,8 @@ import {
   formatHandRecordResult,
   createReadyGame,
   createTrainingRound,
+  getGameResultBreakdown,
+  getHandRecordResultBreakdown,
   getToCall,
   preflopStrength,
   refreshHandAdvice,
@@ -101,6 +103,34 @@ for (let hand = 0; hand < 120; hand += 1) {
   assert.equal(record.heroCards.length, 2);
   assert.ok(record.actions.length >= 3);
   assert.ok(record.advice.items.length >= 2);
+  assert.deepEqual(record.sidePots, game.sidePots);
+
+  const liveBreakdown = getGameResultBreakdown(game);
+  const archivedBreakdown = getHandRecordResultBreakdown(record);
+  const legacyBreakdown = getHandRecordResultBreakdown({
+    ...record,
+    sidePots: undefined,
+  });
+  assert.ok(liveBreakdown.rows.length >= 1, '牌桌结算必须列出赢家');
+  assert.ok(archivedBreakdown.rows.length >= 1, '档案结算必须列出赢家');
+  assert.ok(legacyBreakdown.rows.length >= 1, '旧档案也必须列出赢家');
+  assert.equal(
+    liveBreakdown.rows.reduce((total, row) => total + (row.amount ?? 0), 0),
+    game.finalPot,
+    '结构化结算中的筹码分配必须等于最终底池',
+  );
+  if (game.showdown) {
+    liveBreakdown.rows.forEach((row) => {
+      assert.ok(row.winnerName, '摊牌结算必须显示赢家姓名');
+      assert.ok(row.cards, '摊牌结算必须显示赢家手牌');
+      assert.ok(row.handName, '摊牌结算必须突出获胜牌型');
+      assert.ok(row.handDescription, '摊牌结算必须说明牌型组成');
+    });
+  } else {
+    assert.equal(liveBreakdown.rows[0]?.handName, null);
+    assert.equal(liveBreakdown.rows[0]?.handDescription, null);
+  }
+
   assert.ok(
     game.winnerIds.every((winnerId) =>
       game.resultText.includes(
@@ -123,6 +153,50 @@ for (let hand = 0; hand < 120; hand += 1) {
 }
 const trainingRound = createTrainingRound('test-session');
 const roundRecord = toHandRecord(game, 'test-session', trainingRound.id, 1);
+const splitPotBreakdown = getHandRecordResultBreakdown({
+  ...roundRecord,
+  showdown: true,
+  pot: 150,
+  winnerNames: ['火花', '老K'],
+  sidePots: [
+    {
+      amount: 100,
+      winners: ['火花'],
+      winnerCards: ['A♠ A♥'],
+      handName: '一对',
+      handDescription: '一对（A，K、Q、J 踢脚）',
+      payouts: [{ name: '火花', amount: 100 }],
+    },
+    {
+      amount: 50,
+      winners: ['火花', '老K'],
+      winnerCards: ['10♠ 9♠', '10♥ 9♥'],
+      handName: '顺子',
+      handDescription: '顺子（10 高）',
+      payouts: [
+        { name: '火花', amount: 25 },
+        { name: '老K', amount: 25 },
+      ],
+    },
+  ],
+});
+assert.deepEqual(
+  splitPotBreakdown.rows.map((row) => row.potLabel),
+  ['主池', '边池 1', '边池 1'],
+);
+assert.deepEqual(
+  splitPotBreakdown.rows.map((row) => row.winnerName),
+  ['火花', '火花', '老K'],
+);
+assert.deepEqual(
+  splitPotBreakdown.rows.map((row) => row.handName),
+  ['一对', '顺子', '顺子'],
+);
+assert.equal(
+  splitPotBreakdown.rows.reduce((total, row) => total + (row.amount ?? 0), 0),
+  150,
+);
+
 const updatedRound = appendHandToRound(trainingRound, roundRecord);
 assert.equal(roundRecord.trainingRoundId, trainingRound.id);
 assert.equal(roundRecord.roundHandNumber, 1);
