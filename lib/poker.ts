@@ -696,7 +696,7 @@ function rankLabel(value: number) {
       13: 'K',
       12: 'Q',
       11: 'J',
-      10: 'T',
+      10: '10',
     }[value] ?? String(value)
   );
 }
@@ -1112,6 +1112,123 @@ export function chooseBotDecision(
   };
 }
 
+const PREFLOP_ADVICE_TITLES = new Set(['翻前选择', '翻前范围', '翻前入池判断']);
+
+export function evaluatePreflopDecision(
+  heroCards: Card[],
+  dealerIndex: number,
+  actions: GameAction[],
+  playerId = 'hero',
+): AdviceItem {
+  const firstVoluntary = actions.find(
+    (action) =>
+      action.playerId === playerId &&
+      action.street === 'preflop' &&
+      ['fold', 'check', 'call', 'bet', 'raise'].includes(action.type),
+  );
+  const firstVoluntaryIndex = firstVoluntary
+    ? actions.findIndex((action) => action.id === firstVoluntary.id)
+    : -1;
+  const priorPreflopActions =
+    firstVoluntaryIndex >= 0
+      ? actions
+          .slice(0, firstVoluntaryIndex)
+          .filter((action) => action.street === 'preflop')
+      : [];
+  const priorRaiseCount = priorPreflopActions.filter(
+    (action) => action.type === 'raise' || action.type === 'bet',
+  ).length;
+  const priorCallCount = priorPreflopActions.filter(
+    (action) => action.type === 'call',
+  ).length;
+  const strength = preflopStrength(heroCards);
+  const position = positionLabel(0, dealerIndex);
+  const cardsLabel = heroCards.map(cardText).join(' ');
+  const [firstCard, secondCard] = heroCards;
+  const pairAdjustment =
+    firstCard && secondCard && firstCard.rank === secondCard.rank ? -7 : 0;
+  const suitedConnectorAdjustment =
+    firstCard &&
+    secondCard &&
+    firstCard.suit === secondCard.suit &&
+    Math.abs(RANK_VALUE[firstCard.rank] - RANK_VALUE[secondCard.rank]) <= 2
+      ? -4
+      : 0;
+  const positionFloor =
+    (
+      {
+        UTG: 52,
+        CO: 44,
+        BTN: 35,
+        SB: 44,
+        BB: 40,
+      } as Record<string, number>
+    )[position] ?? 48;
+  const entryFloor = Math.max(
+    20,
+    Math.min(
+      92,
+      positionFloor +
+        pairAdjustment +
+        suitedConnectorAdjustment +
+        (priorRaiseCount > 0 ? 18 + Math.max(0, priorRaiseCount - 1) * 8 : 0),
+    ),
+  );
+  const tableContext =
+    priorRaiseCount > 0
+      ? priorRaiseCount === 1
+        ? '面对一次加注'
+        : `面对 ${priorRaiseCount} 次加注`
+      : priorCallCount > 0
+        ? `前面有 ${priorCallCount} 人跟注`
+        : '前面无人自愿入池';
+
+  if (!firstVoluntary) {
+    return {
+      title: '翻前入池判断',
+      verdict: 'note',
+      text: '这手牌在你行动前就已结束，没有形成可评价的翻前入池决策。',
+    };
+  }
+  if (firstVoluntary.type === 'check') {
+    return {
+      title: '翻前入池判断',
+      verdict: 'good',
+      text: `${cardsLabel} 在 ${position} 获得免费过牌；这不是自愿投入筹码入池，选择过牌合理。`,
+    };
+  }
+  if (firstVoluntary.type === 'fold') {
+    const missedEntry = strength >= entryFloor;
+    return {
+      title: '翻前入池判断',
+      verdict: missedEntry ? 'review' : 'good',
+      text: missedEntry
+        ? `${cardsLabel} 在 ${position}，${tableContext}。结合这手具体牌、位置与前序行动，它已进入可继续区间，本次弃牌偏紧；${priorRaiseCount > 0 ? '可再比较对手范围后选择跟注或再加注' : '若决定入池，通常优先加注'}。`
+        : `${cardsLabel} 在 ${position}，${tableContext}。结合这手具体牌、位置与前序行动，它未达到清晰的入池区间，本次弃牌合理。`,
+    };
+  }
+
+  const tooLoose = strength < entryFloor;
+  const passiveEntry =
+    firstVoluntary.type === 'call' &&
+    priorRaiseCount === 0 &&
+    strength >= entryFloor + 10;
+  const needsReview = tooLoose || passiveEntry;
+  const actionLabel =
+    firstVoluntary.type === 'raise' || firstVoluntary.type === 'bet'
+      ? '加注'
+      : '跟注';
+  return {
+    title: '翻前入池判断',
+    verdict: needsReview ? 'review' : 'good',
+    text: tooLoose
+      ? `${cardsLabel} 在 ${position}，${tableContext}。结合这手具体牌、位置与前序行动，本次${actionLabel}偏松，弃牌会是更稳健的基线。`
+      : passiveEntry
+        ? `${cardsLabel} 在 ${position}，${tableContext}。这手牌值得入池，但在无人加注时平跟会放弃主动权，通常优先考虑加注。`
+        : `${cardsLabel} 在 ${position}，${tableContext}。这手牌处于可继续区间，本次${actionLabel}是可解释的选择。`,
+  };
+}
+
 function generateAdvice(state: GameState): HandAdvice {
   const hero = state.players[0];
   const heroActions = state.actions.filter(
@@ -1119,43 +1236,14 @@ function generateAdvice(state: GameState): HandAdvice {
       action.playerId === hero.id &&
       ['fold', 'check', 'call', 'bet', 'raise'].includes(action.type),
   );
-  const preflopActions = heroActions.filter(
-    (action) => action.street === 'preflop',
+  const preflopDecision = evaluatePreflopDecision(
+    hero.holeCards,
+    state.dealerIndex,
+    state.actions,
+    hero.id,
   );
-  const firstVoluntary = preflopActions[0];
-  const strength = preflopStrength(hero.holeCards);
-  const position = positionLabel(0, state.dealerIndex);
-  const items: AdviceItem[] = [];
-  let deductions = 0;
-
-  if (!firstVoluntary) {
-    items.push({
-      title: '翻前选择',
-      verdict: 'note',
-      text: '这手牌在你行动前就已结束，没有可评价的主动决策。继续关注位置与桌上行动。',
-    });
-  } else if (firstVoluntary.type === 'fold') {
-    const questionable =
-      strength >= 68 || (['BTN', 'CO'].includes(position) && strength >= 52);
-    if (questionable) deductions += 1;
-    items.push({
-      title: '翻前选择',
-      verdict: questionable ? 'review' : 'good',
-      text: questionable
-        ? `${cardText(hero.holeCards[0])}${cardText(hero.holeCards[1])} 在 ${position} 具有一定可玩性；面对当前尺度可考虑更主动地进入底池。`
-        : `这手牌的牌力评分约为 ${strength}/100，在 ${position} 弃牌保持了合理的起手牌纪律。`,
-    });
-  } else {
-    const tooLoose = strength < 36 && !['BTN', 'CO'].includes(position);
-    if (tooLoose) deductions += 1;
-    items.push({
-      title: '翻前范围',
-      verdict: tooLoose ? 'review' : 'good',
-      text: tooLoose
-        ? `牌力评分约 ${strength}/100，且你位于 ${position}；从这个位置继续偏松，长期容易被身后玩家施压。`
-        : `从 ${position} 用这手牌继续是可解释的选择；注意结合前位加注尺度调整范围。`,
-    });
-  }
+  const items: AdviceItem[] = [preflopDecision];
+  let deductions = preflopDecision.verdict === 'review' ? 1 : 0;
 
   const aggressive = heroActions.filter(
     (action) => action.type === 'bet' || action.type === 'raise',
@@ -1193,6 +1281,33 @@ function generateAdvice(state: GameState): HandAdvice {
     text: `本手结果为 ${heroProfit >= 0 ? '+' : ''}${heroProfit} 筹码。单手输赢不代表决策质量，优先复查当时可见信息与底池赔率。`,
   });
 
+  const grade: HandAdvice['grade'] =
+    deductions === 0 ? 'A' : deductions === 1 ? 'B' : 'C';
+  return {
+    grade,
+    headline:
+      grade === 'A'
+        ? '线路整体清晰'
+        : grade === 'B'
+          ? '有一处值得复盘'
+          : '建议放慢决策节奏',
+    items,
+  };
+}
+
+export function refreshHandAdvice(record: HandRecord): HandAdvice {
+  const preflopDecision = evaluatePreflopDecision(
+    record.heroCards,
+    record.dealerIndex,
+    record.actions,
+  );
+  const items = [
+    preflopDecision,
+    ...record.advice.items.filter(
+      (item) => !PREFLOP_ADVICE_TITLES.has(item.title),
+    ),
+  ];
+  const deductions = items.filter((item) => item.verdict === 'review').length;
   const grade: HandAdvice['grade'] =
     deductions === 0 ? 'A' : deductions === 1 ? 'B' : 'C';
   return {
@@ -1335,15 +1450,22 @@ export function generateRoundCoachReport(
   hands: HandRecord[] = [],
 ): RoundCoachReport {
   const count = round.handsPlayed;
-  const gradeCounts = round.gradeCounts ?? { A: 0, B: 0, C: 0 };
+  const gradeCounts =
+    hands.length > 0
+      ? hands.reduce(
+          (counts, hand) => {
+            counts[refreshHandAdvice(hand).grade] += 1;
+            return counts;
+          },
+          { A: 0, B: 0, C: 0 },
+        )
+      : (round.gradeCounts ?? { A: 0, B: 0, C: 0 });
   const gradedHands = gradeCounts.A + gradeCounts.B + gradeCounts.C;
   const baseGradeScore = gradedHands
     ? (gradeCounts.A * 2 + gradeCounts.B) / (gradedHands * 2)
     : 0.5;
   const vpip = count ? Math.round((round.vpipHands / count) * 100) : 0;
   const pfr = count ? Math.round((round.pfrHands / count) * 100) : 0;
-  const passiveGap = vpip - pfr;
-  const profitBb = round.heroProfit / BIG_BLIND;
   const showdownRate = count
     ? Math.round((round.showdownHands / count) * 100)
     : 0;
@@ -1352,14 +1474,37 @@ export function generateRoundCoachReport(
     hand.roundHandNumber ?? hand.handNumber;
   const signedBb = (chips: number) =>
     `${chips >= 0 ? '+' : ''}${(chips / BIG_BLIND).toFixed(1)} BB`;
-  const preflopCallHands = hands.filter((hand) =>
-    hand.actions.some(
-      (action) =>
-        action.playerId === 'hero' &&
-        action.street === 'preflop' &&
-        action.type === 'call',
-    ),
-  ).length;
+  const preflopDecisionDetails = hands
+    .map((hand) => {
+      const item = evaluatePreflopDecision(
+        hand.heroCards,
+        hand.dealerIndex,
+        hand.actions,
+      );
+      return item.verdict !== 'note' ? { hand, item } : null;
+    })
+    .filter(
+      (
+        detail,
+      ): detail is {
+        hand: HandRecord;
+        item: AdviceItem;
+      } => detail !== null,
+    );
+  const preflopReviewDetails = preflopDecisionDetails.filter(
+    ({ item }) => item.verdict === 'review',
+  );
+  const reviewedHandList = preflopReviewDetails
+    .slice(0, 4)
+    .map(
+      ({ hand }) =>
+        `第 ${handNumber(hand)} 手 ${hand.heroCards.map(cardText).join(' ')}（${positionLabel(0, hand.dealerIndex)}）`,
+    )
+    .join('、');
+  const reviewedHandText =
+    preflopReviewDetails.length > 4
+      ? `${reviewedHandList} 等 ${preflopReviewDetails.length} 手`
+      : reviewedHandList;
   const costlyLosses = hands
     .filter((hand) => hand.heroProfit <= -BIG_BLIND * 20)
     .sort((left, right) => handNumber(left) - handNumber(right));
@@ -1378,23 +1523,24 @@ export function generateRoundCoachReport(
     topWins.length === 3 &&
     remainingProfit < 0;
 
-  let adjustedGradeScore = baseGradeScore;
-  if (count >= 6) {
-    if (vpip >= 55) adjustedGradeScore -= 0.2;
-    else if (vpip >= 45) adjustedGradeScore -= 0.1;
-
-    if (passiveGap >= 15) adjustedGradeScore -= 0.12;
-    else if (passiveGap >= 10) adjustedGradeScore -= 0.06;
-  }
   const grade: HandAdvice['grade'] =
-    adjustedGradeScore >= 0.72 ? 'A' : adjustedGradeScore >= 0.4 ? 'B' : 'C';
+    count === 0
+      ? 'B'
+      : baseGradeScore >= 0.72
+        ? 'A'
+        : baseGradeScore >= 0.4
+          ? 'B'
+          : 'C';
 
   const issueCounts = new Map<string, number>();
   hands.forEach((hand) => {
-    hand.advice.items
-      .filter((item) => item.verdict === 'review')
+    refreshHandAdvice(hand)
+      .items.filter((item) => item.verdict === 'review')
       .forEach((item) => {
-        issueCounts.set(item.title, (issueCounts.get(item.title) ?? 0) + 1);
+        const issueTitle = PREFLOP_ADVICE_TITLES.has(item.title)
+          ? '翻前入池判断'
+          : item.title;
+        issueCounts.set(issueTitle, (issueCounts.get(issueTitle) ?? 0) + 1);
       });
   });
   const recurringIssue = [...issueCounts.entries()].sort(
@@ -1416,18 +1562,22 @@ export function generateRoundCoachReport(
       text:
         count === 0
           ? '本轮还没有完成手牌，结束若干手后才会形成整体评价。'
-          : `逐手启发式评分为 A ${gradeCounts.A}、B ${gradeCounts.B}、C ${gradeCounts.C}。轮次总评还会纳入 VPIP/PFR 结构与整轮风险分布，避免仅因短期盈利或单手结果给出过高评价。`,
+          : `逐手启发式评分为 A ${gradeCounts.A}、B ${gradeCounts.B}、C ${gradeCounts.C}。本轮总评以每手牌的具体决策质量为主；VPIP/PFR 只作跨轮频率参考，不参与单手正误或总评等级。`,
     },
     {
-      title: '翻前入池结构',
+      title: '逐手翻前入池判断',
       verdict:
-        count < 6 ? 'note' : passiveGap >= 15 || vpip >= 45 ? 'review' : 'good',
+        preflopDecisionDetails.length === 0
+          ? 'note'
+          : preflopReviewDetails.length > 0
+            ? 'review'
+            : 'good',
       text:
-        count < 6
-          ? `当前 VPIP ${vpip}%、PFR ${pfr}%，样本不足 6 手，只记录倾向，不据此给打法定性。`
-          : passiveGap >= 15 || vpip >= 45
-            ? `VPIP ${vpip}%、PFR ${pfr}%，相差 ${passiveGap} 个百分点；${preflopCallHands} 手出现翻前跟注动作。这不表示每次跟注都错，但说明入池过宽和被动线路是下一轮的首要训练主题。`
-            : `VPIP ${vpip}%、PFR ${pfr}%，本轮没有明显的被动入池信号；继续按位置和对手类型管理范围。`,
+        preflopDecisionDetails.length === 0
+          ? '当前没有可读取的逐手翻前决策，教练不会仅凭 VPIP/PFR 推断入池是否正确。'
+          : preflopReviewDetails.length > 0
+            ? `在 ${preflopDecisionDetails.length} 次可评价的翻前决策中，有 ${preflopReviewDetails.length} 次需要复盘：${reviewedHandText}。这些标记来自具体手牌、位置和入池前行动。`
+            : `逐手检查了 ${preflopDecisionDetails.length} 次可评价的翻前决策，暂未发现明显的入池范围错误。结论来自具体手牌、位置和入池前行动，而不是 VPIP 高低。`,
     },
     {
       title: '大底池风险控制',
@@ -1461,23 +1611,27 @@ export function generateRoundCoachReport(
   ];
 
   const nextSteps: string[] = [];
-  if (count < 6) {
-    nextSteps.push('下一轮至少完成 6–8 手，再判断频率类指标是否形成趋势。');
-  } else if (vpip >= 45 || passiveGap >= 15) {
+  if (preflopReviewDetails.length > 0) {
     nextSteps.push(
-      '把下一轮设为“翻前入池纪律”专项：以 VPIP 低于 45%、VPIP-PFR 差距小于 12 个百分点作为训练目标，首次自愿入池优先加注或弃牌。',
+      `先复盘${reviewedHandText}：逐手写出位置、前序行动、有效筹码和入池理由，再核对这手牌是否应该入池。`,
+    );
+  } else if (preflopDecisionDetails.length > 0) {
+    nextSteps.push(
+      '继续为每次自愿入池记录四项依据：具体手牌、位置、前序行动和有效筹码。',
     );
   } else {
-    nextSteps.push('继续按位置记录翻前入池理由，保持主动性并跨轮验证频率。');
+    nextSteps.push(
+      '下一轮至少完成 6–8 手，并保留逐手行动记录后再判断翻前入池质量。',
+    );
   }
 
-  if (count >= 6 && (vpip >= 45 || preflopCallHands >= 3)) {
+  if (recurringIssue && recurringIssue[1] >= 2) {
     nextSteps.push(
-      '面对 limper 时，以约 4BB 加每位 limper 1BB 作为隔离加注训练基线，再按位置、筹码和对手调整。',
+      `把“${recurringIssue[0]}”设为下一轮唯一主课题，并在每次行动前口头复述理由。`,
     );
   } else {
     nextSteps.push(
-      '每次翻前加注前明确目标：拿下死钱、隔离弱手，或为强范围建立底池。',
+      '每次翻前行动前先回答：这手牌在当前位置，面对当前行动，应该加注、跟注还是弃牌？',
     );
   }
 
@@ -1492,19 +1646,17 @@ export function generateRoundCoachReport(
   const headline =
     count === 0
       ? '等待本轮形成训练样本'
-      : vpip >= 55 && profitBb >= 0
-        ? '盈利不错，但翻前范围与大底池边界需要收紧'
-        : vpip >= 55
-          ? '先收紧翻前范围，再谈扩大盈利'
-          : passiveGap >= 15
-            ? '减少被动入池，建立翻前主动性'
-            : grade === 'C'
-              ? '先修正决策流程中的高频漏洞'
-              : concentratedProfit
-                ? '强牌兑现出色，过程稳定性仍需提升'
-                : grade === 'A'
-                  ? '本轮决策节奏整体稳定'
-                  : '本轮基础线路基本稳定';
+      : grade === 'C'
+        ? '先修正决策流程中的高频漏洞'
+        : preflopReviewDetails.length >= 2
+          ? '先修正具体手牌的翻前入池判断'
+          : preflopReviewDetails.length === 1
+            ? '有一手翻前入池决策值得重点复盘'
+            : concentratedProfit
+              ? '强牌兑现出色，过程稳定性仍需提升'
+              : grade === 'A'
+                ? '本轮逐手决策整体稳定'
+                : '本轮基础线路基本稳定';
 
   return {
     grade,
@@ -1512,11 +1664,12 @@ export function generateRoundCoachReport(
     summary:
       count === 0
         ? '完成手牌后，教练会先汇总整轮趋势，再提供逐手复盘。'
-        : `本轮完成 ${count} 手，VPIP ${vpip}%、PFR ${pfr}%，摊牌 ${round.showdownHands} 手（${showdownRate}%）、赢下 ${round.wins} 手，盈亏 ${signedBb(round.heroProfit)}。频率指标已经能暴露初步趋势，但仍需跨多个轮次验证。`,
+        : `本轮完成 ${count} 手，逐手检查 ${preflopDecisionDetails.length} 次可评价的翻前决策，其中 ${preflopReviewDetails.length} 次需要复盘；摊牌 ${round.showdownHands} 手（${showdownRate}%）、赢下 ${round.wins} 手，盈亏 ${signedBb(round.heroProfit)}。频率记录为 VPIP ${vpip}%、PFR ${pfr}%，仅供跨轮观察，不参与本轮正误或总评。`,
     items,
     nextSteps: nextSteps.slice(0, 3),
   };
 }
+
 export function completeTrainingRound(
   round: TrainingRoundRecord,
   hands: HandRecord[] = [],
@@ -1540,8 +1693,12 @@ export function suitSymbol(suit: Suit) {
   return { s: '♠', h: '♥', d: '♦', c: '♣' }[suit];
 }
 
+export function rankText(rank: Rank) {
+  return rank === 'T' ? '10' : rank;
+}
+
 export function cardText(card: Card) {
-  return `${card.rank}${suitSymbol(card.suit)}`;
+  return `${rankText(card.rank)}${suitSymbol(card.suit)}`;
 }
 
 export function isRedSuit(suit: Suit) {

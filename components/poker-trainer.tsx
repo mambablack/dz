@@ -49,6 +49,8 @@ import {
   isRedSuit,
   positionLabel,
   preflopStrength,
+  rankText,
+  refreshHandAdvice,
   startNextHand,
   streetName,
   suitSymbol,
@@ -104,7 +106,7 @@ function aggregateHandsAsRound(
   const ordered = sortRoundHands(hands);
   const gradeCounts = ordered.reduce(
     (counts, hand) => {
-      counts[hand.advice.grade] += 1;
+      counts[refreshHandAdvice(hand).grade] += 1;
       return counts;
     },
     { A: 0, B: 0, C: 0 },
@@ -252,7 +254,7 @@ function PokerCard({
       <div
         className={`absolute left-2 top-1.5 ${rankSize} font-black leading-none ${red ? 'text-[#d3423b]' : 'text-[#181d1b]'}`}
       >
-        <div>{card.rank}</div>
+        <div>{rankText(card.rank)}</div>
         <div className={`mt-0.5 ${cornerSuitSize}`}>
           {suitSymbol(card.suit)}
         </div>
@@ -976,6 +978,7 @@ function MiniStat({
 }
 
 function HistoryReview({ record }: { record: HandRecord }) {
+  const refreshedAdvice = refreshHandAdvice(record);
   return (
     <div className="grid min-h-0 grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0">
@@ -1106,10 +1109,23 @@ function HistoryReview({ record }: { record: HandRecord }) {
         <p className="mb-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
           牌后教练
         </p>
-        <AdviceView advice={record.advice} />
+        <AdviceView advice={refreshedAdvice} />
       </div>
     </div>
   );
+}
+
+function getPreflopDecisionStats(hands: HandRecord[]) {
+  const decisions = hands
+    .map((hand) => refreshHandAdvice(hand).items[0])
+    .filter(
+      (item): item is AdviceItem =>
+        item !== undefined && item.verdict !== 'note',
+    );
+  return {
+    total: decisions.length,
+    reviews: decisions.filter((item) => item.verdict === 'review').length,
+  };
 }
 
 function RoundArchiveReview({
@@ -1131,6 +1147,7 @@ function RoundArchiveReview({
   const pfr = round.handsPlayed
     ? Math.round((round.pfrHands / round.handsPlayed) * 100)
     : 0;
+  const preflopStats = getPreflopDecisionStats(hands);
   const profitBb = round.heroProfit / BIG_BLIND;
 
   return (
@@ -1182,15 +1199,22 @@ function RoundArchiveReview({
           <MiniStat label="本轮手牌" value={String(round.handsPlayed)} />
         </div>
         <div className="rounded-2xl border border-white/12 bg-white/[.04] p-5">
-          <MiniStat label="VPIP" value={`${vpip}%`} />
+          <MiniStat label="翻前决策" value={`${preflopStats.total} 手`} />
         </div>
         <div className="rounded-2xl border border-white/12 bg-white/[.04] p-5">
-          <MiniStat label="PFR" value={`${pfr}%`} />
+          <MiniStat
+            label="需要复盘"
+            value={`${preflopStats.reviews} 手`}
+            tone={preflopStats.reviews > 0 ? 'negative' : undefined}
+          />
         </div>
         <div className="rounded-2xl border border-white/12 bg-white/[.04] p-5">
           <MiniStat label="教练总评" value={report.grade} />
         </div>
       </div>
+      <p className="mt-3 text-sm leading-6 text-white/55">
+        {`频率参考：VPIP ${vpip}% · PFR ${pfr}%。仅用于跨轮观察，不参与单手正误或轮次评分。`}
+      </p>
 
       <section className="mt-10">
         <div className="mb-4 flex items-center gap-3">
@@ -1254,7 +1278,7 @@ function RoundArchiveReview({
                       {hand.heroCards.map(cardText).join('  ')}
                     </p>
                     <p className="mt-2 text-xs text-white/62">
-                      底池 {hand.pot} · 评分 {hand.advice.grade}
+                      底池 {hand.pot} · 评分 {refreshHandAdvice(hand).grade}
                     </p>
                     {Math.abs(hand.heroProfit) >= BIG_BLIND * 20 && (
                       <p className="mt-2.5 text-xs font-semibold text-amber-200/85">
@@ -1416,6 +1440,17 @@ function RoundSummaryDialog({
     : 0;
   const profitBb = round.heroProfit / BIG_BLIND;
   const report = generateRoundCoachReport(round, hands);
+  const preflopStats = getPreflopDecisionStats(hands);
+  const refreshedGradeCounts =
+    hands.length > 0
+      ? hands.reduce(
+          (counts, hand) => {
+            counts[refreshHandAdvice(hand).grade] += 1;
+            return counts;
+          },
+          { A: 0, B: 0, C: 0 },
+        )
+      : round.gradeCounts;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1451,18 +1486,26 @@ function RoundSummaryDialog({
                 />
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[.035] p-4">
-                <MiniStat label="VPIP" value={`${vpip}%`} />
+                <MiniStat label="翻前决策" value={`${preflopStats.total} 手`} />
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[.035] p-4">
-                <MiniStat label="PFR" value={`${pfr}%`} />
+                <MiniStat
+                  label="需要复盘"
+                  value={`${preflopStats.reviews} 手`}
+                  tone={preflopStats.reviews > 0 ? 'negative' : undefined}
+                />
               </div>
             </div>
+
+            <p className="mt-3 text-sm leading-6 text-white/55">
+              {`频率参考：VPIP ${vpip}% · PFR ${pfr}%。仅用于跨轮观察，不参与单手正误或轮次评分。`}
+            </p>
 
             <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/[.028] px-4 py-3 text-sm">
               <span className="text-white/65">逐手评分</span>
               <span className="tabular-nums text-white/82">
-                A {round.gradeCounts.A} · B {round.gradeCounts.B} · C{' '}
-                {round.gradeCounts.C}
+                A {refreshedGradeCounts.A} · B {refreshedGradeCounts.B} · C{' '}
+                {refreshedGradeCounts.C}
               </span>
             </div>
 

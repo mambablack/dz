@@ -12,6 +12,7 @@ import {
   createTrainingRound,
   getToCall,
   preflopStrength,
+  refreshHandAdvice,
   startNextHand,
   toHandRecord,
   type Card,
@@ -31,6 +32,7 @@ assert.equal(
   ]).name,
   '同花顺',
 );
+assert.equal(cardText(card('T', 's')), '10♠', '十点牌应显示为 10，而不是 T');
 assert.equal(
   bestHand([
     card('9', 's'),
@@ -145,7 +147,7 @@ const regeneratedReport = generateRoundCoachReport(completedRound, [
   roundRecord,
 ]);
 assert.match(regeneratedReport.summary, /1 手/);
-const looseRoundReport = generateRoundCoachReport(
+const frequencyOnlyReport = generateRoundCoachReport(
   {
     ...completedRound,
     handsPlayed: 10,
@@ -155,7 +157,56 @@ const looseRoundReport = generateRoundCoachReport(
   },
   [],
 );
-assert.equal(looseRoundReport.grade, 'B');
-assert.match(looseRoundReport.headline, /翻前范围/);
+assert.equal(frequencyOnlyReport.grade, 'A', '高 VPIP 本身不应降低轮次评分');
+assert.doesNotMatch(frequencyOnlyReport.headline, /翻前范围|收紧/);
+assert.match(frequencyOnlyReport.summary, /仅供跨轮观察，不参与本轮正误或总评/);
+
+const reviewedPreflopHand = {
+  ...roundRecord,
+  heroCards: [card('7', 's'), card('2', 'h')],
+  dealerIndex: 2,
+  actions: [
+    {
+      id: 'weak-utg-call',
+      playerId: 'hero',
+      playerName: 'Hero',
+      street: 'preflop' as const,
+      type: 'call' as const,
+      amount: 10,
+      potBefore: 15,
+      description: 'Hero 跟注 10',
+    },
+  ],
+  advice: {
+    grade: 'A' as const,
+    headline: '旧版评价',
+    items: [
+      {
+        title: '翻前选择',
+        verdict: 'good' as const,
+        text: '旧版评价认为这手牌没有问题。',
+      },
+    ],
+  },
+};
+assert.equal(
+  refreshHandAdvice(reviewedPreflopHand).items[0]?.verdict,
+  'review',
+  '旧档案必须按具体手牌、位置与前序行动重新判断',
+);
+const decisionLedReport = generateRoundCoachReport(
+  {
+    ...completedRound,
+    gradeCounts: { A: 0, B: 1, C: 0 },
+  },
+  [reviewedPreflopHand],
+);
+assert.equal(decisionLedReport.grade, 'B');
+assert.equal(
+  decisionLedReport.items.find((item) => item.title === '逐手翻前入池判断')
+    ?.verdict,
+  'review',
+);
+assert.match(decisionLedReport.summary, /1 次需要复盘/);
 
 console.log('Poker engine checks passed: evaluator + 120 complete hands');
