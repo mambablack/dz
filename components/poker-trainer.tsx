@@ -407,6 +407,29 @@ function HandResultCard({
           })
         )}
       </div>
+      {result.uncalledReturns.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-sky-300/20 bg-sky-300/[.06] px-4 py-3">
+          <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-sky-300/10 text-sky-200">
+            <TimerReset className="size-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-sky-100">未跟注筹码已退回</p>
+            <p className="mt-0.5 text-xs leading-5 text-sky-100/60">
+              这部分没有对手匹配，不计入最终底池
+            </p>
+          </div>
+          <div className="ml-auto text-right">
+            {result.uncalledReturns.map((returned) => (
+              <p
+                key={`${returned.playerId}-${returned.amount}`}
+                className="text-sm font-bold tabular-nums text-sky-100"
+              >
+                {returned.playerName} +{returned.amount} 筹码
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -854,6 +877,7 @@ function Timeline({
         const isDeal =
           action.type === 'deal' ||
           action.type === 'showdown' ||
+          action.type === 'return' ||
           action.type === 'win';
         return (
           <div

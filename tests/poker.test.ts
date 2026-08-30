@@ -18,6 +18,7 @@ import {
   startNextHand,
   toHandRecord,
   type Card,
+  type GameState,
 } from '../lib/poker';
 
 const card = (rank: Card['rank'], suit: Card['suit']): Card => ({ rank, suit });
@@ -151,6 +152,129 @@ for (let hand = 0; hand < 120; hand += 1) {
   }
   assert.match(game.resultText, /赢得：|底池：/, '结算必须说明筹码归属');
 }
+
+const baseUncalledGame = createReadyGame();
+const uncalledGameState: GameState = {
+  ...baseUncalledGame,
+  handId: 'uncalled-test',
+  handNumber: 1,
+  dealerIndex: 2,
+  startingStacks: [500, 500, 500, 500, 70],
+  players: baseUncalledGame.players.map((player, index) => {
+    if (index === 0) {
+      return {
+        ...player,
+        stack: 380,
+        holeCards: [card('Q', 'd'), card('J', 's')],
+        folded: false,
+        allIn: false,
+        acted: true,
+        streetBet: 120,
+        totalBet: 120,
+        lastAction: '下注 120',
+      };
+    }
+    if (index === 4) {
+      return {
+        ...player,
+        stack: 70,
+        holeCards: [card('9', 's'), card('J', 'h')],
+        folded: false,
+        allIn: false,
+        acted: false,
+        streetBet: 0,
+        totalBet: 0,
+        lastAction: '',
+      };
+    }
+    return {
+      ...player,
+      stack: 500,
+      holeCards: [card('A', index === 1 ? 's' : index === 2 ? 'h' : 'd')],
+      folded: true,
+      allIn: false,
+      acted: true,
+      streetBet: 0,
+      totalBet: 0,
+      lastAction: '弃牌',
+    };
+  }),
+  board: [
+    card('2', 's'),
+    card('Q', 'c'),
+    card('9', 'c'),
+    card('3', 's'),
+    card('Q', 's'),
+  ],
+  street: 'river',
+  currentBet: 120,
+  minRaise: 120,
+  actingIndex: 4,
+  actions: [
+    {
+      id: 'hero-river-bet',
+      playerId: 'hero',
+      playerName: 'Hero',
+      street: 'river',
+      type: 'bet',
+      amount: 120,
+      toAmount: 120,
+      potBefore: 0,
+      description: 'Hero 下注 120',
+    },
+  ],
+  status: 'playing',
+};
+const uncalledGame = applyAction(uncalledGameState, 4, { type: 'call' });
+assert.equal(uncalledGame.status, 'complete');
+assert.equal(uncalledGame.finalPot, 140, '未跟注的 50 筹码不得计入最终底池');
+assert.deepEqual(uncalledGame.uncalledReturns, [
+  { playerId: 'hero', playerName: 'Hero', amount: 50 },
+]);
+assert.equal(uncalledGame.players[0].stack, 570);
+assert.equal(uncalledGame.players[4].stack, 0);
+assert.equal(
+  uncalledGame.players.reduce((sum, player) => sum + player.stack, 0),
+  uncalledGame.startingStacks.reduce((sum, stack) => sum + stack, 0),
+  '退回未跟注筹码后仍必须保持筹码守恒',
+);
+const uncalledBreakdown = getGameResultBreakdown(uncalledGame);
+assert.equal(uncalledBreakdown.totalPot, 140);
+assert.equal(uncalledBreakdown.rows.length, 1);
+assert.equal(uncalledBreakdown.rows[0]?.potLabel, '总底池');
+assert.equal(uncalledBreakdown.rows[0]?.amount, 140);
+assert.equal(uncalledBreakdown.uncalledReturns[0]?.amount, 50);
+assert.match(uncalledGame.resultText, /未被跟注退回：Hero 50 筹码/);
+
+const correctedRecord = toHandRecord(uncalledGame, 'uncalled-session');
+const wonPot = uncalledGame.sidePots[0];
+const legacyUncalledRecord = {
+  ...correctedRecord,
+  pot: 190,
+  resultText: '旧版错误底池',
+  uncalledReturns: undefined,
+  actions: correctedRecord.actions.filter((action) => action.type !== 'return'),
+  sidePots: [
+    wonPot,
+    {
+      ...wonPot,
+      amount: 50,
+      payouts: [{ name: 'Hero', amount: 50 }],
+    },
+  ],
+};
+const legacyUncalledBreakdown =
+  getHandRecordResultBreakdown(legacyUncalledRecord);
+assert.equal(
+  legacyUncalledBreakdown.totalPot,
+  140,
+  '旧档案中的未跟注筹码也应从最终底池扣除',
+);
+assert.equal(legacyUncalledBreakdown.rows.length, 1);
+assert.equal(legacyUncalledBreakdown.rows[0]?.potLabel, '总底池');
+assert.equal(legacyUncalledBreakdown.rows[0]?.amount, 140);
+assert.equal(legacyUncalledBreakdown.uncalledReturns[0]?.amount, 50);
+
 const trainingRound = createTrainingRound('test-session');
 const roundRecord = toHandRecord(game, 'test-session', trainingRound.id, 1);
 const splitPotBreakdown = getHandRecordResultBreakdown({

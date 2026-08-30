@@ -28,6 +28,7 @@ export type ActionType =
   | 'bet'
   | 'raise'
   | 'deal'
+  | 'return'
   | 'win'
   | 'showdown';
 
@@ -98,6 +99,12 @@ export interface SidePotResult {
   }>;
 }
 
+export interface UncalledBetReturn {
+  playerId: string;
+  playerName: string;
+  amount: number;
+}
+
 export interface HandResultBreakdownRow {
   potLabel: string;
   winnerName: string;
@@ -112,6 +119,7 @@ export interface HandResultBreakdown {
   showdown: boolean;
   totalPot: number;
   rows: HandResultBreakdownRow[];
+  uncalledReturns: UncalledBetReturn[];
 }
 
 export interface GameState {
@@ -133,6 +141,7 @@ export interface GameState {
   winnerIds: string[];
   showdown: boolean;
   sidePots: SidePotResult[];
+  uncalledReturns: UncalledBetReturn[];
   advice: HandAdvice | null;
 }
 
@@ -169,6 +178,7 @@ export interface HandRecord {
   winnerNames: string[];
   showdown: boolean;
   sidePots?: SidePotResult[];
+  uncalledReturns?: UncalledBetReturn[];
   advice: HandAdvice;
   heroStats: {
     vpip: boolean;
@@ -322,6 +332,7 @@ export function createReadyGame(): GameState {
     winnerIds: [],
     showdown: false,
     sidePots: [],
+    uncalledReturns: [],
     advice: null,
   };
 }
@@ -455,6 +466,7 @@ export function startNextHand(previous: GameState): GameState {
     winnerIds: [],
     showdown: false,
     sidePots: [],
+    uncalledReturns: [],
     advice: null,
   };
 }
@@ -487,6 +499,7 @@ function cloneGame(state: GameState): GameState {
     actions: [...state.actions],
     winnerIds: [...state.winnerIds],
     sidePots: [...state.sidePots],
+    uncalledReturns: state.uncalledReturns.map((returned) => ({ ...returned })),
   };
 }
 
@@ -669,15 +682,60 @@ function advanceStreet(state: GameState): GameState {
   return state;
 }
 
+function returnUncalledBet(state: GameState) {
+  const rankedContributors = state.players
+    .filter((player) => player.totalBet > 0)
+    .sort((left, right) => right.totalBet - left.totalBet);
+  const highest = rankedContributors[0];
+  const secondHighest = rankedContributors[1]?.totalBet ?? 0;
+  if (!highest || highest.totalBet <= secondHighest) return;
+
+  const amount = highest.totalBet - secondHighest;
+  const potBefore = getPotFromPlayers(state.players);
+  highest.stack += amount;
+  highest.totalBet -= amount;
+  highest.streetBet = Math.max(0, highest.streetBet - amount);
+  const returned: UncalledBetReturn = {
+    playerId: highest.id,
+    playerName: highest.name,
+    amount,
+  };
+  state.uncalledReturns.push(returned);
+  state.actions.push({
+    id: makeId('a'),
+    playerId: highest.id,
+    playerName: highest.name,
+    street: state.street,
+    type: 'return',
+    amount,
+    potBefore,
+    description: `${highest.name} 未被跟注的 ${amount} 筹码退回`,
+  });
+}
+
+function formatUncalledReturns(returns: UncalledBetReturn[]) {
+  if (returns.length === 0) return '';
+  const details = returns
+    .map((returned) => `${returned.playerName} ${returned.amount} 筹码`)
+    .join('、');
+  return `｜未被跟注退回：${details}`;
+}
+
 function awardUncontested(state: GameState, winner: Player): GameState {
+  returnUncalledBet(state);
   const pot = getPotFromPlayers(state.players);
   winner.stack += pot;
-  winner.lastAction = `赢得 ${pot}`;
+  const returned = state.uncalledReturns.find(
+    (item) => item.playerId === winner.id,
+  );
+  winner.lastAction = returned
+    ? `赢得 ${pot} · 退回 ${returned.amount}`
+    : `赢得 ${pot}`;
   state.finalPot = pot;
   state.status = 'complete';
   state.actingIndex = -1;
   state.winnerIds = [winner.id];
-  state.resultText = `${winner.name}获胜｜方式：其他玩家全部弃牌｜赢得：${pot} 筹码`;
+  state.resultText = `${winner.name}获胜｜方式：其他玩家全部弃牌｜赢得：${pot} 筹码${formatUncalledReturns(state.uncalledReturns)}`;
   state.actions.push({
     id: makeId('a'),
     playerId: winner.id,
@@ -825,10 +883,8 @@ export function bestHand(cards: Card[]): EvaluatedHand {
   return best ?? { values: [0], name: '高牌' };
 }
 
-function formatShowdownResult(pots: SidePotResult[]) {
-  if (pots.length === 0) return '摊牌完成｜未形成可分配底池';
-
-  const summarized = pots.reduce<SidePotResult[]>((groups, current) => {
+function summarizePotResults(pots: SidePotResult[]) {
+  return pots.reduce<SidePotResult[]>((groups, current) => {
     const previous = groups[groups.length - 1];
     const sameWinners =
       previous &&
@@ -858,8 +914,18 @@ function formatShowdownResult(pots: SidePotResult[]) {
     });
     return groups;
   }, []);
+}
 
-  return summarized
+function formatShowdownResult(
+  pots: SidePotResult[],
+  uncalledReturns: UncalledBetReturn[] = [],
+) {
+  if (pots.length === 0)
+    return `摊牌完成｜未形成可分配底池${formatUncalledReturns(uncalledReturns)}`;
+
+  const summarized = summarizePotResults(pots);
+
+  const result = summarized
     .map((result, index) => {
       const potLabel =
         summarized.length === 1
@@ -884,8 +950,10 @@ function formatShowdownResult(pots: SidePotResult[]) {
       return `${potLabel}${winnerText}平分底池｜牌型：${result.handDescription}｜底池：${result.amount} 筹码（分配：${allocation}）`;
     })
     .join('；');
+  return `${result}${formatUncalledReturns(uncalledReturns)}`;
 }
 function resolveShowdown(state: GameState): GameState {
+  returnUncalledBet(state);
   const pot = getPotFromPlayers(state.players);
   const levels = [
     ...new Set(
@@ -965,7 +1033,12 @@ function resolveShowdown(state: GameState): GameState {
         state.players.findIndex((player) => player.id === winner.id)
       ] +
       winner.totalBet;
-    winner.lastAction = `摊牌赢得 ${Math.max(0, won)}`;
+    const returned = state.uncalledReturns.find(
+      (item) => item.playerId === winner.id,
+    );
+    winner.lastAction = returned
+      ? `摊牌赢得 ${Math.max(0, won)} · 退回 ${returned.amount}`
+      : `摊牌赢得 ${Math.max(0, won)}`;
   });
   state.finalPot = pot;
   state.status = 'complete';
@@ -973,7 +1046,7 @@ function resolveShowdown(state: GameState): GameState {
   state.winnerIds = [...winnerIds];
   state.showdown = true;
   state.sidePots = sidePots;
-  state.resultText = formatShowdownResult(sidePots);
+  state.resultText = formatShowdownResult(sidePots, state.uncalledReturns);
   state.actions.push({
     id: makeId('a'),
     playerId: 'dealer',
@@ -991,9 +1064,14 @@ function resolveShowdown(state: GameState): GameState {
 function resultRowsFromSidePots(
   pots: SidePotResult[],
 ): HandResultBreakdownRow[] {
-  return pots.flatMap((pot, potIndex) => {
+  const summarized = summarizePotResults(pots);
+  return summarized.flatMap((pot, potIndex) => {
     const potLabel =
-      pots.length === 1 ? '主池' : potIndex === 0 ? '主池' : `边池 ${potIndex}`;
+      summarized.length === 1
+        ? '总底池'
+        : potIndex === 0
+          ? '主池'
+          : `边池 ${potIndex}`;
     const payouts =
       pot.payouts.length > 0
         ? pot.payouts
@@ -1027,7 +1105,7 @@ function fallbackShowdownRows(
   return winners.map((winner) => {
     const hand = bestHand([...winner.cards, ...board]);
     return {
-      potLabel: '主池',
+      potLabel: '总底池',
       winnerName: winner.name,
       cards: winner.cards.map(cardText).join(' '),
       handName: hand.name,
@@ -1053,7 +1131,12 @@ export function getGameResultBreakdown(state: GameState): HandResultBreakdown {
             state.board,
             state.finalPot,
           );
-    return { showdown: true, totalPot: state.finalPot, rows };
+    return {
+      showdown: true,
+      totalPot: state.finalPot,
+      rows,
+      uncalledReturns: state.uncalledReturns,
+    };
   }
 
   const winner = state.players.find((player) =>
@@ -1062,6 +1145,7 @@ export function getGameResultBreakdown(state: GameState): HandResultBreakdown {
   return {
     showdown: false,
     totalPot: state.finalPot,
+    uncalledReturns: state.uncalledReturns,
     rows: winner
       ? [
           {
@@ -1078,35 +1162,134 @@ export function getGameResultBreakdown(state: GameState): HandResultBreakdown {
   };
 }
 
+const CONTRIBUTION_ACTION_TYPES = new Set<ActionType>([
+  'small-blind',
+  'big-blind',
+  'call',
+  'bet',
+  'raise',
+]);
+
+function inferLegacyUncalledReturns(record: HandRecord): UncalledBetReturn[] {
+  const contributions = new Map<
+    string,
+    { playerId: string; playerName: string; amount: number }
+  >();
+  record.actions.forEach((action) => {
+    if (!CONTRIBUTION_ACTION_TYPES.has(action.type) || action.amount <= 0)
+      return;
+    const current = contributions.get(action.playerId) ?? {
+      playerId: action.playerId,
+      playerName: action.playerName,
+      amount: 0,
+    };
+    current.amount += action.amount;
+    contributions.set(action.playerId, current);
+  });
+  const ranked = [...contributions.values()].sort(
+    (left, right) => right.amount - left.amount,
+  );
+  const highest = ranked[0];
+  const secondHighest = ranked[1]?.amount ?? 0;
+  if (!highest || highest.amount <= secondHighest) return [];
+  return [
+    {
+      playerId: highest.playerId,
+      playerName: highest.playerName,
+      amount: highest.amount - secondHighest,
+    },
+  ];
+}
+
+function removeReturnsFromLegacyPots(
+  pots: SidePotResult[],
+  uncalledReturns: UncalledBetReturn[],
+) {
+  const normalized = pots.map((pot) => ({
+    ...pot,
+    winners: [...pot.winners],
+    winnerCards: [...pot.winnerCards],
+    payouts: pot.payouts.map((payout) => ({ ...payout })),
+  }));
+
+  uncalledReturns.forEach((returned) => {
+    let remaining = returned.amount;
+    for (
+      let index = normalized.length - 1;
+      index >= 0 && remaining > 0;
+      index -= 1
+    ) {
+      const pot = normalized[index];
+      if (pot.winners.length !== 1 || pot.winners[0] !== returned.playerName)
+        continue;
+      const payout = pot.payouts.find(
+        (candidate) => candidate.name === returned.playerName,
+      );
+      const available = Math.min(pot.amount, payout?.amount ?? pot.amount);
+      const removed = Math.min(remaining, available);
+      pot.amount -= removed;
+      if (payout) payout.amount -= removed;
+      remaining -= removed;
+      if (pot.amount === 0) normalized.splice(index, 1);
+    }
+  });
+  return normalized;
+}
+
+function getRecordSettlement(record: HandRecord) {
+  const explicitReturns = record.uncalledReturns;
+  const inferred = explicitReturns === undefined;
+  const uncalledReturns: UncalledBetReturn[] =
+    explicitReturns ?? inferLegacyUncalledReturns(record);
+  const returnedAmount = inferred
+    ? uncalledReturns.reduce((total, returned) => total + returned.amount, 0)
+    : 0;
+  return {
+    totalPot: Math.max(0, record.pot - returnedAmount),
+    uncalledReturns,
+    sidePots:
+      inferred && record.sidePots
+        ? removeReturnsFromLegacyPots(record.sidePots, uncalledReturns)
+        : (record.sidePots ?? []),
+  };
+}
+
 export function getHandRecordResultBreakdown(
   record: HandRecord,
 ): HandResultBreakdown {
+  const settlement = getRecordSettlement(record);
   if (record.showdown) {
     const rows =
-      record.sidePots && record.sidePots.length > 0
-        ? resultRowsFromSidePots(record.sidePots)
+      settlement.sidePots.length > 0
+        ? resultRowsFromSidePots(settlement.sidePots)
         : fallbackShowdownRows(
             record.players
               .filter((player) => record.winnerNames.includes(player.name))
               .map((player) => ({ name: player.name, cards: player.cards })),
             record.board,
-            record.pot,
+            settlement.totalPot,
           );
-    return { showdown: true, totalPot: record.pot, rows };
+    return {
+      showdown: true,
+      totalPot: settlement.totalPot,
+      rows,
+      uncalledReturns: settlement.uncalledReturns,
+    };
   }
 
   const winnerName = record.winnerNames.join('、') || '最后未弃牌的玩家';
   return {
     showdown: false,
-    totalPot: record.pot,
+    totalPot: settlement.totalPot,
+    uncalledReturns: settlement.uncalledReturns,
     rows: [
       {
-        potLabel: '整池',
+        potLabel: '总底池',
         winnerName,
         cards: '',
         handName: null,
         handDescription: null,
-        amount: record.pot,
+        amount: settlement.totalPot,
         isSplit: false,
       },
     ],
@@ -1509,6 +1692,7 @@ export function toHandRecord(
       winnerCards: [...sidePot.winnerCards],
       payouts: sidePot.payouts.map((payout) => ({ ...payout })),
     })),
+    uncalledReturns: state.uncalledReturns.map((returned) => ({ ...returned })),
     advice: state.advice ?? generateAdvice(state),
     heroStats: {
       vpip: heroPreflop.some((action) =>
@@ -1522,17 +1706,17 @@ export function toHandRecord(
 }
 
 export function formatHandRecordResult(record: HandRecord) {
-  if (
-    record.resultText.includes('牌型：') ||
-    record.resultText.includes('方式：')
-  ) {
-    return record.resultText;
-  }
-
+  const settlement = getRecordSettlement(record);
   if (!record.showdown) {
     const winner = record.winnerNames.join('、') || '最后未弃牌的玩家';
-    return `${winner}获胜｜方式：其他玩家全部弃牌｜赢得：${record.pot} 筹码`;
+    return `${winner}获胜｜方式：其他玩家全部弃牌｜赢得：${settlement.totalPot} 筹码${formatUncalledReturns(settlement.uncalledReturns)}`;
   }
+
+  if (settlement.sidePots.length > 0)
+    return formatShowdownResult(
+      settlement.sidePots,
+      settlement.uncalledReturns,
+    );
 
   const winners = record.players.filter((player) =>
     record.winnerNames.includes(player.name),
@@ -1542,7 +1726,7 @@ export function formatHandRecordResult(record: HandRecord) {
   if (winners.length === 1) {
     const winner = winners[0];
     const hand = bestHand([...winner.cards, ...record.board]);
-    return `${winner.name}（${winner.cards.map(cardText).join(' ')}）获胜｜牌型：${describeEvaluatedHand(hand)}｜最终底池：${record.pot} 筹码`;
+    return `${winner.name}（${winner.cards.map(cardText).join(' ')}）获胜｜牌型：${describeEvaluatedHand(hand)}｜最终底池：${settlement.totalPot} 筹码${formatUncalledReturns(settlement.uncalledReturns)}`;
   }
 
   const winnerDetails = winners
@@ -1551,7 +1735,7 @@ export function formatHandRecordResult(record: HandRecord) {
       return `${winner.name}（${winner.cards.map(cardText).join(' ')}）— 牌型：${describeEvaluatedHand(hand)}`;
     })
     .join('；');
-  return `赢家：${winnerDetails}｜最终底池：${record.pot} 筹码`;
+  return `赢家：${winnerDetails}｜最终底池：${settlement.totalPot} 筹码${formatUncalledReturns(settlement.uncalledReturns)}`;
 }
 
 export function createTrainingRound(sessionId: string): TrainingRoundRecord {
