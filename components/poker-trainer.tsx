@@ -35,6 +35,7 @@ import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   BIG_BLIND,
+  STARTING_STACK,
   applyAction,
   appendHandToRound,
   completeTrainingRound,
@@ -460,7 +461,7 @@ function PlayerSeat({
         </div>
       )}
       <div
-        className={`relative flex min-w-[132px] items-center gap-2.5 rounded-2xl border p-2.5 shadow-2xl backdrop-blur transition-all sm:min-w-[148px] sm:gap-3 sm:p-3 ${
+        className={`relative flex min-w-[150px] items-center gap-2.5 rounded-2xl border p-2.5 shadow-2xl backdrop-blur transition-all sm:min-w-[176px] sm:gap-3 sm:p-3 ${
           active
             ? 'border-[#c9ff63]/65 bg-[#1a251b] shadow-[0_0_0_3px_rgba(201,255,99,.08),0_18px_45px_rgba(0,0,0,.45)]'
             : player.isHero
@@ -473,7 +474,7 @@ function PlayerSeat({
         >
           {player.shortName}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-white sm:text-[15px]">
             {player.name}
             {!player.isHero && (
@@ -485,6 +486,11 @@ function PlayerSeat({
           <div className="mt-1 flex items-center gap-1.5 text-xs tabular-nums text-amber-300 sm:text-sm">
             <Coins className="size-3.5" />
             {player.stack}
+          </div>
+          <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-[10px] font-semibold tabular-nums text-sky-100/65 sm:text-[11px]">
+            <span>买入 {player.buyInCount ?? 1} 次</span>
+            <span className="text-white/20">·</span>
+            <span>累计 {player.totalBuyIn ?? STARTING_STACK}</span>
           </div>
         </div>
         {position && (
@@ -877,6 +883,7 @@ function Timeline({
         const isDeal =
           action.type === 'deal' ||
           action.type === 'showdown' ||
+          action.type === 'buy-in' ||
           action.type === 'return' ||
           action.type === 'win';
         return (
@@ -1250,6 +1257,10 @@ function HistoryReview({ record }: { record: HandRecord }) {
                         ? '+'
                         : ''}
                       {player.endingStack - player.startingStack})
+                    </p>
+                    <p className="mt-1 text-xs font-medium tabular-nums text-sky-100/58">
+                      买入 {player.buyInCount ?? 1} 次 · 累计{' '}
+                      {player.totalBuyIn ?? STARTING_STACK} 筹码
                     </p>
                   </div>
                   <div

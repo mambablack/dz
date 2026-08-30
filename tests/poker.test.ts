@@ -53,6 +53,33 @@ assert.ok(
     preflopStrength([card('7', 's'), card('2', 'h')]),
 );
 
+const buyInSeed = createReadyGame();
+buyInSeed.players[4].stack = 5;
+const rebuyGame = startNextHand(buyInSeed);
+assert.equal(
+  rebuyGame.players[4].stack,
+  505,
+  '每次自动买入应增加完整的 500 筹码',
+);
+assert.equal(rebuyGame.players[4].buyInCount, 2);
+assert.equal(rebuyGame.players[4].totalBuyIn, 1000);
+assert.ok(
+  rebuyGame.actions.some(
+    (action) =>
+      action.playerId === 'station' &&
+      action.type === 'buy-in' &&
+      action.amount === 500,
+  ),
+  '自动买入必须写入本手行动记录',
+);
+const nextGameWithoutRebuy = startNextHand(rebuyGame);
+assert.equal(
+  nextGameWithoutRebuy.players[4].buyInCount,
+  2,
+  '筹码充足时不得重复增加买入次数',
+);
+assert.equal(nextGameWithoutRebuy.players[4].totalBuyIn, 1000);
+
 let game = createReadyGame();
 for (let hand = 0; hand < 120; hand += 1) {
   game = startNextHand(game);
@@ -104,6 +131,15 @@ for (let hand = 0; hand < 120; hand += 1) {
   assert.equal(record.heroCards.length, 2);
   assert.ok(record.actions.length >= 3);
   assert.ok(record.advice.items.length >= 2);
+  record.players.forEach((player, index) => {
+    assert.equal(player.buyInCount, game.players[index].buyInCount);
+    assert.equal(player.totalBuyIn, game.players[index].totalBuyIn);
+    assert.equal(
+      player.totalBuyIn,
+      (player.buyInCount ?? 1) * 500,
+      '累计买入应与买入次数一致',
+    );
+  });
   assert.deepEqual(record.sidePots, game.sidePots);
 
   const liveBreakdown = getGameResultBreakdown(game);

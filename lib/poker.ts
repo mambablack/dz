@@ -28,6 +28,7 @@ export type ActionType =
   | 'bet'
   | 'raise'
   | 'deal'
+  | 'buy-in'
   | 'return'
   | 'win'
   | 'showdown';
@@ -51,6 +52,8 @@ export interface Player {
   acted: boolean;
   streetBet: number;
   totalBet: number;
+  buyInCount: number;
+  totalBuyIn: number;
   lastAction: string;
 }
 
@@ -170,6 +173,8 @@ export interface HandRecord {
     endingStack: number;
     cards: Card[];
     folded: boolean;
+    buyInCount?: number;
+    totalBuyIn?: number;
   }>;
   actions: GameAction[];
   pot: number;
@@ -308,6 +313,8 @@ function makePlayer(blueprint: (typeof PLAYER_BLUEPRINTS)[number]): Player {
     acted: false,
     streetBet: 0,
     totalBet: 0,
+    buyInCount: 1,
+    totalBuyIn: STARTING_STACK,
     lastAction: '',
   };
 }
@@ -416,21 +423,44 @@ function findNextPending(
 
 export function startNextHand(previous: GameState): GameState {
   const dealerIndex = nextIndex(previous.dealerIndex);
-  const players = previous.players.map((player, index) => ({
-    ...player,
-    stack: player.stack < BIG_BLIND ? STARTING_STACK : player.stack,
-    holeCards: [] as Card[],
-    folded: false,
-    allIn: false,
-    acted: false,
-    streetBet: 0,
-    totalBet: 0,
-    lastAction: '',
-    id: PLAYER_BLUEPRINTS[index].id,
-  }));
+  const players = previous.players.map((player, index) => {
+    const needsBuyIn = player.stack < BIG_BLIND;
+    const previousBuyInCount = player.buyInCount ?? 1;
+    const previousTotalBuyIn =
+      player.totalBuyIn ?? previousBuyInCount * STARTING_STACK;
+    return {
+      ...player,
+      stack: player.stack + (needsBuyIn ? STARTING_STACK : 0),
+      holeCards: [] as Card[],
+      folded: false,
+      allIn: false,
+      acted: false,
+      streetBet: 0,
+      totalBet: 0,
+      buyInCount: previousBuyInCount + (needsBuyIn ? 1 : 0),
+      totalBuyIn: previousTotalBuyIn + (needsBuyIn ? STARTING_STACK : 0),
+      lastAction: needsBuyIn ? `自动买入 ${STARTING_STACK}` : '',
+      id: PLAYER_BLUEPRINTS[index].id,
+    };
+  });
   const startingStacks = players.map((player) => player.stack);
   const deck = shuffleDeck(makeDeck());
-  const actions: GameAction[] = [];
+  const actions: GameAction[] = players.flatMap((player, index) => {
+    const previousBuyInCount = previous.players[index].buyInCount ?? 1;
+    if (player.buyInCount === previousBuyInCount) return [];
+    return [
+      {
+        id: makeId('a'),
+        playerId: player.id,
+        playerName: player.name,
+        street: 'preflop',
+        type: 'buy-in',
+        amount: STARTING_STACK,
+        potBefore: 0,
+        description: `${player.name} 自动买入 ${STARTING_STACK}（第 ${player.buyInCount} 次，累计 ${player.totalBuyIn}）`,
+      },
+    ];
+  });
 
   for (let round = 0; round < 2; round += 1) {
     for (let step = 1; step <= players.length; step += 1) {
@@ -1679,6 +1709,8 @@ export function toHandRecord(
       endingStack: player.stack,
       cards: [...player.holeCards],
       folded: player.folded,
+      buyInCount: player.buyInCount,
+      totalBuyIn: player.totalBuyIn,
     })),
     actions: state.actions,
     pot: state.finalPot,
