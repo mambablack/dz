@@ -1,0 +1,16 @@
+[Unit]
+Description=RiverLab poker trainer (vinext standalone Node server)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/workspace/dez/dz
+Environment=PORT=80
+Environment=HOST=0.0.0.0
+Environment=RIVERLAB_DB_PATH=/root/workspace/dez/dz/data/riverlab.db
+ExecStart=/usr/local/bin/node --disable-warning=ExperimentalWarning dist/standalone/server.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

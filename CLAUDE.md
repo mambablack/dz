@@ -41,6 +41,6 @@ Two route handlers (`GET/POST /api/hands`, `GET/POST /api/rounds`) validate payl
 ### Build/deploy wiring
 
 - `vite.config.ts` wires the `vinext()` plugin plus Tailwind v4 via PostCSS — nothing else.
-- `next.config.ts` sets `output: "standalone"`; `vinext build` then emits `dist/standalone/` (start with `node dist/standalone/server.js`, env: `PORT`, `HOST`).
+- `next.config.ts` sets `output: "standalone"`; `vinext build` then emits `dist/standalone/` (start with `node dist/standalone/server.js`, env: `PORT`, `HOST`). On this server the app runs as the `riverlab` systemd service on port 80 (unit in `deploy/riverlab.service`; install with `cp deploy/riverlab.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now riverlab`).
 - Path alias: `@/*` → repo root (tsconfig `paths`). UI components follow shadcn conventions (`components.json`, style `base-nova`, lucide icons).
 - The SQLite data directory `/data` is gitignored; back it up separately if state matters.
